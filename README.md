@@ -1,6 +1,8 @@
 # Frax
 
-A sleek **WebGL fractal explorer** with zoom-to-cursor, curated dark palettes, multiple fractal types, and one-click screenshots - all in a single HTML file.
+A sleek **WebGL fractal explorer** with zoom-to-cursor, curated dark palettes, multiple fractal types, and one-click screenshots - all in a single HTML file.    
+
+[▶ Live demo](https://swiftredvox.github.io/frax/)
 
 ## Gallery
 
@@ -23,7 +25,8 @@ A sleek **WebGL fractal explorer** with zoom-to-cursor, curated dark palettes, m
 - No dependencies (vanilla JS + WebGL)
 
 ## Quick start
-- Open or download `frax_v2.23.4_release.html` in a modern browser (Chrome/Edge/Firefox).  
+To run the demo online: [Launch the live demo](https://swiftredvox.github.io/frax/)    
+Altternatively, download and open `frax_v2.23.4_release.html` in any modern browser (e.g. Chrome/Edge/Firefox).  
 
 ## Controls
 **Mouse**
