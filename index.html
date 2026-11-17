@@ -1,62 +1,106 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Frax — WebGL Fractal Explorer</title>
-  <meta name="description" content="Zoom-to-cursor fractal explorer with curated dark palettes, multiple sets, and one-click screenshots." />
-  <meta name="theme-color" content="#0b0f14" />
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Frax — Infinite Fractal Explorer</title>
+    <meta name="description" content="Fly endlessly into the Mandelbrot set and friends. A deep-zoom fractal explorer for the browser with a hands-free autopilot." />
+    <meta name="theme-color" content="#05070d" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Frax — Infinite Fractal Explorer" />
+    <meta property="og:description" content="Press play and fall into the Mandelbrot set forever. Deep zoom, autopilot, beautiful palettes — right in your browser." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://swiftredvox.github.io/frax/" />
+    <meta property="og:image" content="https://swiftredvox.github.io/frax/og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://swiftredvox.github.io/frax/og.jpg" />
+  </head>
+  <body>
+    <canvas id="view" aria-label="Fractal view"></canvas>
 
-  <!-- Canonical URL -->
-  <link rel="canonical" href="https://swiftredvox.github.io/frax/" />
+    <div id="ui">
+      <header class="brand glass-soft" id="brand">
+        <div class="wordmark">frax</div>
+        <div class="depth" id="depth" title="Magnification">
+          <span class="depth-x">×</span><span class="depth-m" id="depthM">1.00</span><span class="depth-e" id="depthE"></span>
+        </div>
+        <div class="status" id="status"><span class="spinner"></span><span id="statusText">Rendering</span></div>
+      </header>
 
-<!-- Open Graph / Discord / Slack -->
-<meta property="og:title" content="Frax — WebGL Fractal Explorer">
-<meta property="og:description" content="Zoom-to-cursor fractal explorer with curated dark palettes, multiple sets, and one-click screenshots.">
-<meta property="og:url" content="https://swiftredvox.github.io/frax/">
-<meta property="og:image" content="https://swiftredvox.github.io/frax/docs/showcase_1.png?v=2">
-<meta property="og:type" content="website">
+      <div class="hint" id="hint">
+        <div class="hint-title">Fall into infinity</div>
+        <div class="hint-body">Press <kbd>Space</kbd> or <b>Journey</b> to start an endless, hands-free zoom.<br />Scroll to zoom, drag to look around.</div>
+      </div>
 
-<!-- Twitter / X -->
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Frax — WebGL Fractal Explorer">
-<meta name="twitter:description" content="Zoom-to-cursor fractal explorer with curated dark palettes, multiple sets, and one-click screenshots.">
-<meta name="twitter:image" content="https://swiftredvox.github.io/frax/docs/showcase_1.png?v=2">
+      <nav class="dock glass" id="dock" aria-label="Controls">
+        <button class="journey-btn" id="btnJourney" aria-pressed="false" title="Start or stop the journey (Space)">
+          <span class="ji ji-play"></span>
+          <span class="ji ji-pause"></span>
+          <span class="journey-label">Journey</span>
+        </button>
+        <div class="speed" title="Journey speed">
+          <input type="range" id="speed" min="0.15" max="2" step="0.05" aria-label="Journey speed" />
+          <span class="speed-val" id="speedVal"></span>
+        </div>
+        <span class="sep"></span>
+        <button class="icon-btn" id="btnHome" title="Back to the start (H)" data-icon="home"></button>
+        <button class="icon-btn" id="btnShot" title="Save image (S)" data-icon="camera"></button>
+        <button class="icon-btn" id="btnRec" title="Record video (R)" data-icon="record" hidden></button>
+        <button class="icon-btn" id="btnShare" title="Copy link to this place" data-icon="link"></button>
+        <button class="icon-btn" id="btnFull" title="Full screen (F)" data-icon="expand"></button>
+        <span class="sep"></span>
+        <button class="icon-btn" id="btnPanel" title="Settings (Tab)" data-icon="sliders" aria-expanded="false" aria-controls="panel"></button>
+      </nav>
 
-  <!-- Redirect to the shipped build -->
-  <meta http-equiv="refresh" content="0; url=frax_v2.23.4_release.html" />
-  <script>
-    // JS redirect (faster in most browsers; meta refresh is a fallback)
-    location.replace('frax_v2.23.4_release.html');
-  </script>
+      <aside class="panel glass" id="panel" aria-label="Settings" hidden>
+        <div class="panel-head">
+          <h2>Settings</h2>
+          <button class="icon-btn small" id="btnClose" title="Close" data-icon="close"></button>
+        </div>
+        <div class="panel-body">
+          <section>
+            <h3>Fractal</h3>
+            <div class="fractals" id="fractals"></div>
+            <div class="julia" id="juliaBox" hidden>
+              <div class="julia-row">
+                <label>c = <input id="juliaRe" type="text" inputmode="decimal" spellcheck="false" /></label>
+                <label>+ <input id="juliaIm" type="text" inputmode="decimal" spellcheck="false" /> i</label>
+              </div>
+              <div class="julia-presets" id="juliaPresets"></div>
+            </div>
+            <button class="text-btn" id="btnPickJulia" hidden title="Open the Julia set for the point at the centre of the screen">
+              <span data-icon="sparkle"></span> Julia set of this spot
+            </button>
+          </section>
 
-  <!-- Prefetch the target for a snappier first load -->
-  <link rel="prefetch" href="frax_v2.23.4_release.html" as="document" />
+          <section>
+            <h3>Colour</h3>
+            <div class="palettes" id="palettes"></div>
+            <label class="slider"><span>Bands</span><input type="range" id="density" min="0.25" max="4" step="0.01" /></label>
+            <label class="slider"><span>Flow</span><input type="range" id="cycle" min="0" max="0.4" step="0.005" /></label>
+            <label class="slider"><span>Relief</span><input type="range" id="shade" min="0" max="1" step="0.01" /></label>
+          </section>
 
-  <style>
-    :root { color-scheme: dark light; }
-    html, body {
-      height: 100%; margin: 0;
-      background: #0b0f14; color: #cfd8e3;
-      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-    }
-    main { height: 100%; display: grid; place-items: center; text-align: center; padding: 1rem; }
-    a { color: #78c1ff; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .links { margin-top: .5rem; opacity: .9; }
-  </style>
-</head>
-<body>
-  <main>
-    <div>
-      <p>Redirecting to <a href="frax_v2.23.4_release.html">Frax</a>…</p>
-      <p class="links">
-        <a href="https://github.com/swiftredvox/frax">View on GitHub</a>
-      </p>
-      <noscript>
-        <p><strong>JavaScript is disabled.</strong> Click <a href="frax_v2.23.4_release.html">here</a> to open Frax.</p>
-      </noscript>
+          <section>
+            <h3>Quality</h3>
+            <div class="seg" id="quality" role="radiogroup" aria-label="Render quality">
+              <button data-v="0.6">Fast</button><button data-v="1">Sharp</button><button data-v="1.5">Ultra</button>
+            </div>
+            <label class="slider"><span>Detail</span><input type="range" id="detail" min="0.5" max="4" step="0.05" /></label>
+          </section>
+
+          <section class="about">
+            <p>Drag to look around, scroll or pinch to zoom, double-click to dive. <kbd>Space</kbd> journey · <kbd>H</kbd> home · <kbd>S</kbd> save · <kbd>[</kbd> <kbd>]</kbd> palette · <kbd>F</kbd> full screen.</p>
+            <p class="small"><a href="https://github.com/swiftredvox/frax" target="_blank" rel="noopener">Frax on GitHub</a> · MIT licence</p>
+          </section>
+        </div>
+      </aside>
+
+      <div class="coords glass-soft" id="coords" title="Click to copy coordinates"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <div class="error" id="error" hidden></div>
     </div>
-  </main>
-</body>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

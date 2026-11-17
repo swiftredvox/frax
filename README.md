@@ -1,66 +1,67 @@
 # Frax
 
-A sleek **WebGL fractal explorer** with zoom-to-cursor, curated dark palettes, multiple fractal types, and one-click screenshots - all in a single HTML file.    
+**An infinite fractal explorer for the browser.** Press play and fall into the Mandelbrot set — forever.
 
-[▶ Live demo](https://swiftredvox.github.io/frax/)
-
-## Gallery
+[**▶ Open Frax**](https://swiftredvox.github.io/frax/)
 
 <p align="center">
-  <img src="docs/showcase_1.png" width="49%" alt="Frax showcase 1">
-  <img src="docs/showcase_2.png" width="49%" alt="Frax showcase 2">
+  <img src="docs/gallery-1.jpg" width="49%" alt="Deep spiral arms in the Mandelbrot set, purple and peach">
+  <img src="docs/gallery-2.jpg" width="49%" alt="A fiery spiral deep in the Mandelbrot set">
 </p>
 <p align="center">
-  <img src="docs/showcase_3.png" width="49%" alt="Frax showcase 3">
-  <img src="docs/showcase_4.png" width="49%" alt="Frax showcase 4">
+  <img src="docs/gallery-3.jpg" width="49%" alt="Seahorse spirals in a Julia set, teal and sand">
+  <img src="docs/gallery-4.jpg" width="49%" alt="Lattice structure deep inside the Burning Ship fractal">
 </p>
 
-## Features
-- Zoom to cursor (mouse wheel) with adjustable **Zoom amount**
-- Multiple fractals: Mandelbrot, Multibrot-3/4/5, Burning Ship, Perpendicular Burning Ship, Celtic, and **Julia** (with C controls)
-- Curated palettes, including static and dynamic hue-shifting colour schemes
-- Auto-zoom play/pause with speed control
-- One-click Screenshots (PNG)
-- Minimal, modern UI with live HUD (center, scale, iterations, FPS)
-- No dependencies (vanilla JS + WebGL)
+## What it does
 
-## Quick start
-To run the demo online: [Launch the live demo](https://swiftredvox.github.io/frax/)    
-Altternatively, download and open `frax_v2.23.4_release.html` in any modern browser (e.g. Chrome/Edge/Firefox).  
+- **Journey mode** — one button starts a hands-free zoom that keeps going. An autopilot reads each frame, steers towards spirals and filigree, avoids dead ends, and never stops to wait.
+- **Deep zoom** — far past the 10¹⁵ limit of ordinary graphics maths. Frax has been flown beyond 10⁶⁰ and keeps its detail all the way down.
+- **Smooth at 60 fps** — the next stretch of the zoom is rendered ahead of you in the background, so playback never stutters, however deep you are.
+- **Four fractals** — Mandelbrot, Julia (pick any *c*, or open the Julia set of the spot you're looking at), Burning Ship and Multibrot³.
+- **Palettes that flow** — twelve hand-tuned looping palettes with perceptually smooth blending, gentle colour cycling and soft relief lighting. Colour ranges adapt automatically as you zoom.
+- **Share any place** — the address bar always holds your exact location, at full precision. Copy the link and anyone can open the same view.
+- **Save it** — high-quality PNG snapshots, and video recording in browsers that support it (Chrome, Edge and Safari).
+- **Works anywhere** — mouse, trackpad, touch and keyboard; phones and tablets included.
 
 ## Controls
-**Mouse**
-- **Wheel:** zoom to cursor  
-- **Drag:** pan
 
-**Top bar**
-- Auto zoom ▶ / ❚❚ and Speed  
-- Fractal (drop-down). **Julia** shows `C = a + bi` inputs (0.1 steps)  
-- Palette (colour)
-- Detail (iteration bias)  
-- Zoom amount (wheel sensitivity)  
-- Reset · Screenshot
+| | |
+| --- | --- |
+| **Journey** / <kbd>Space</kbd> | Start or pause the endless zoom |
+| Scroll, pinch, double-click | Zoom (Shift + double-click zooms out) |
+| Drag | Look around |
+| <kbd>H</kbd> | Back to the start |
+| <kbd>S</kbd> | Save an image |
+| <kbd>R</kbd> | Start / stop recording (where supported) |
+| <kbd>[</kbd> <kbd>]</kbd> | Previous / next palette |
+| <kbd>F</kbd> | Full screen |
+| <kbd>Tab</kbd> | Settings |
 
-**Shortcuts**
-- `P` play/pause auto-zoom  
-- `R` reset view  
-- `S` save screenshot  
-- `[` / `]` previous/next palette
+While a journey plays, the interface fades away. Move the mouse or tap to bring it back.
 
-## Fractals
-- **Mandelbrot family:** Mandelbrot, Multibrot-3, Multibrot-4, Multibrot-5  
-- **Burning Ship variants:** Burning Ship, Perpendicular Burning Ship  
-- **Other:** Celtic  
-- **Julia:** editable `C` (Re/Im) fields; behaves differently than the others
+## How it goes so deep
 
-## Palettes
-Oceanic (default), InfernoLite, Aurora, Velvet, Mono, Classic, Sunset, Neon, Forest, Icefire, Magma, Twilight, Copper, Candy, Midnight, Solar, Lavender, Spectrum (cycle).
+Every pixel of a fractal is a little iteration — *z → z² + c* — repeated until it escapes. Ordinary GPU numbers run out of precision after a few thousand times magnification, which is where most browser fractal viewers turn to mush.
 
-## Performance notes
-- Fragment-shader escape-time with smooth coloring `(ν = n + 1 − log(log |z|)/log 2)` 
-- Dynamic iteration target scales with zoom; detail slider nudges the bias  
-- Device pixel ratio is clamped for performance; FPS shown in the HUD
+Frax uses **perturbation theory**. A single *reference orbit* is computed at arbitrary precision on the CPU (in a Web Worker, with `BigInt`), and the GPU then tracks only each pixel's tiny *difference* from that orbit, which fits comfortably in a 32-bit float. Two refinements make it robust:
 
-## License
-**CC0 1.0 Universal — Public Domain Dedication.**  
-You can copy, modify, distribute, and use Frax, even commercially, without asking permission. See `LICENSE` for details.
+- **Extended-range deltas.** Below 10⁻³⁸ even those differences underflow, so each one is stored as a mantissa plus its own exponent until it grows large enough for a plain float.
+- **Rebasing.** Whenever a pixel's orbit comes closer to the critical point than to the reference, it restarts from the critical orbit. This removes the classic "glitches" of perturbation rendering without needing extra reference points.
+
+The autopilot renders keyframes — each twice as deep as the last — ahead of the camera, analyses each one on the GPU, and picks the next target from a score of boundary detail, depth and how much "flat" space is nearby.
+
+## Running locally
+
+```bash
+npm install
+npm run dev
+```
+
+Then open the address it prints. `npm run build` produces a static site in `dist/`.
+
+Frax needs WebGL 2 with float render targets, which every current desktop and mobile browser supports.
+
+## Licence
+
+[MIT](LICENSE) © SwiftRedVox
