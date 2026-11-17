@@ -42,7 +42,7 @@ uniform int uRebase;       // index where the critical orbit (Z = 0) starts
 uniform int uMaxIter;
 uniform int uSteps;
 uniform float uBail2;
-uniform int uFormula;      // 0 mandelbrot, 1 julia, 2 burning ship, 3 multibrot-3, 4 tricorn
+uniform int uFormula;      // 0 mandelbrot, 1 julia, 2 burning ship, 3 multibrot-3, 4 multibrot-4
 uniform float uLogPow;
 
 layout(location=0) out vec4 o0;
@@ -72,8 +72,14 @@ vec2 stepD(vec2 Z, vec2 d, float s, float es, vec2 dct){
     vec2 d2 = cmul(d, d);
     return 3.0*cmul(Z2, d) + 3.0*s*cmul(Z, d2) + s*s*cmul(d2, d) + dct;
   }
+  if (uFormula == 4) {
+    // (Z+δ)^4 − Z^4 = 4Z³δ + 6Z²δ² + 4Zδ³ + δ⁴
+    vec2 Z2 = cmul(Z, Z);
+    vec2 Z3 = cmul(Z2, Z);
+    vec2 d2 = cmul(d, d);
+    return 4.0*cmul(Z3, d) + 6.0*s*cmul(Z2, d2) + 4.0*s*s*cmul(Z, cmul(d2, d)) + s*s*s*cmul(d2, d2) + dct;
+  }
   vec2 r = cmul(2.0*Z, d) + s*cmul(d, d);
-  if (uFormula == 4) r.y = -r.y;            // tricorn: conj(z)^2 + c
   return (uFormula == 1) ? r : r + dct;
 }
 

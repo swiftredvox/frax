@@ -92,7 +92,7 @@ export class OrbitService {
       maxIter,
       bail2: 1e4,
       formula,
-      power: formula === 'multibrot3' ? 3 : 2,
+      power: formula === 'multibrot3' ? 3 : formula === 'multibrot4' ? 4 : 2,
       juliaX: withPrecision(julia.x, p).m,
       juliaY: withPrecision(julia.y, p).m,
     };

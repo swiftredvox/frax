@@ -106,7 +106,7 @@ interface RefTex {
   lastUsed: number;
 }
 
-const LAYER_FORMULA: Record<Formula, number> = { mandelbrot: 0, julia: 1, burningship: 2, multibrot3: 3, tricorn: 4 };
+const LAYER_FORMULA: Record<Formula, number> = { mandelbrot: 0, julia: 1, burningship: 2, multibrot3: 3, multibrot4: 4 };
 
 export class Engine {
   readonly gl: WebGL2RenderingContext;
@@ -410,7 +410,7 @@ export class Engine {
       .i('uSteps', steps)
       .f('uBail2', 1e4)
       .i('uFormula', LAYER_FORMULA[L.spec.formula])
-      .f('uLogPow', Math.log(L.spec.formula === 'multibrot3' ? 3 : 2));
+      .f('uLogPow', Math.log(L.spec.formula === 'multibrot3' ? 3 : L.spec.formula === 'multibrot4' ? 4 : 2));
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     L.cur = dst;

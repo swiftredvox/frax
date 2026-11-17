@@ -31,20 +31,20 @@ export const FRACTALS: FractalInfo[] = [
     formulaTex: 'z² + k',
   },
   {
-    id: 'tricorn',
-    name: 'Tricorn',
-    blurb: 'The Mandelbar: z is mirrored every step, giving three-fold symmetry and flowing, wave-like filaments.',
-    home: { x: -0.3, y: 0, w: 4.4 },
-    flipY: false,
-    formulaTex: 'z̄² + c',
-  },
-  {
     id: 'multibrot3',
     name: 'Multibrot³',
     blurb: 'The cubic cousin of the Mandelbrot set — twin lobes, twice the symmetry.',
     home: { x: 0, y: 0, w: 3.2 },
     flipY: false,
     formulaTex: 'z³ + c',
+  },
+  {
+    id: 'multibrot4',
+    name: 'Multibrot⁴',
+    blurb: 'z⁴ + c — three-fold symmetry, with Mandelbrot-like spirals and mini-copies everywhere you look.',
+    home: { x: -0.05, y: 0, w: 3.9 },
+    flipY: false,
+    formulaTex: 'z⁴ + c',
   },
 ];
 

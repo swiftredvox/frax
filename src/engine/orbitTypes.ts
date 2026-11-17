@@ -1,4 +1,4 @@
-export type Formula = 'mandelbrot' | 'julia' | 'burningship' | 'multibrot3' | 'tricorn';
+export type Formula = 'mandelbrot' | 'julia' | 'burningship' | 'multibrot3' | 'multibrot4';
 
 export interface OrbitRequest {
   id: number;
