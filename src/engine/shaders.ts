@@ -234,6 +234,7 @@ uniform float uOffset;
 uniform float uPeriod2;   // previous mapping, faded out over uMix
 uniform float uOffset2;
 uniform float uMix;       // 1 = only the current mapping
+uniform float uDip;       // fade in from dark after a jump; 1 = fully shown
 uniform float uShade;
 uniform int uMapMode;
 uniform vec3 uInterior;
@@ -312,6 +313,7 @@ void main(){
   acc += colorAt(base + vec2( 0.125,  0.375) * px, px);
   acc += colorAt(base + vec2(-0.375,  0.125) * px, px);
   acc *= 0.25;
+  acc = mix(toLin(uInterior), acc, uDip);
   frag = vec4(pow(acc, vec3(1.0 / 2.2)), 1.0);
 }
 `;

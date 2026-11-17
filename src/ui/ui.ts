@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS, type FraxApp, type Settings } from '../app/app';
 import { magnification } from '../app/camera';
 import { FRACTALS } from '../app/fractals';
-import { fromDecimal, toDecimal, toNumber } from '../core/hp';
+import { fromDecimal, toDecimal } from '../core/hp';
 import { PALETTES, paletteCss } from '../engine/palettes';
 import { hydrateIcons, icon } from './icons';
 import { download, Recorder, recordingMime } from './recorder';
@@ -138,11 +138,6 @@ export class UI {
     $('btnFull').onclick = () => this.fullscreen();
     $('btnPanel').onclick = () => this.togglePanel();
     $('btnClose').onclick = () => this.togglePanel(false);
-    $('coords').onclick = () => {
-      const v = app.view;
-      const d = Math.max(6, Math.ceil(-v.log2w * 0.30103) + 6);
-      this.copy(`${toDecimal(v.cx, d)} ${toDecimal(v.cy, d)}`, 'Coordinates copied');
-    };
     document.addEventListener('fullscreenchange', () => {
       $('btnFull').innerHTML = icon(document.fullscreenElement ? 'shrink' : 'expand');
     });
@@ -292,25 +287,11 @@ export class UI {
       this.lastDepthText = html;
       $('depthM').innerHTML = html;
     }
-    // Coordinates are refreshed lazily — BigInt → decimal isn't free at depth.
-    if (!this.coordsQueued) {
-      this.coordsQueued = true;
-      setTimeout(() => {
-        this.coordsQueued = false;
-        const vv = this.app.view;
-        const d = Math.min(18, Math.max(6, Math.ceil(-vv.log2w * 0.30103) + 3));
-        const x = toDecimal(vv.cx, d);
-        const y = toDecimal(vv.cy, d);
-        const tail = -vv.log2w * 0.30103 > 15 ? '…' : '';
-        $('coords').textContent = `${x}${tail}  ${toNumber(vv.cy) >= 0 ? '+' : '−'} ${y.replace('-', '')}${tail} i`;
-      }, 120);
-    }
     if (!this.app.isJourney) {
       clearTimeout(this.hashTimer);
       this.hashTimer = window.setTimeout(() => history.replaceState(null, '', encodeState(this.app)), 700);
     }
   }
-  private coordsQueued = false;
   private wasJourney = false;
 
   private updateStatus() {

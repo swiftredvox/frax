@@ -31,16 +31,6 @@ export const FRACTALS: FractalInfo[] = [
     formulaTex: 'z² + k',
   },
   {
-    id: 'burningship',
-    name: 'Burning Ship',
-    blurb: 'Absolute values fold the plane — masts, rigging and flames.',
-    home: { x: -0.45, y: -0.55, w: 3.6 },
-    flipY: true,
-    formulaTex: '(|x| + i|y|)² + c',
-    // Most of the ship's edge is chaotic dust; the classic structure lives on the left antenna.
-    journeyStart: { x: -1.7612, y: -0.0285, w: 0.09 },
-  },
-  {
     id: 'tricorn',
     name: 'Tricorn',
     blurb: 'The Mandelbar: z is mirrored every step, giving three-fold symmetry and flowing, wave-like filaments.',

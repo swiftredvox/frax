@@ -49,6 +49,9 @@ export class FraxApp {
   private period2 = 24;
   private offset2 = 0;
   private fade = 1;
+  /** dark dip after a jump: < 0 holds dark until the new view has colour stats */
+  private dip = 1;
+  private jumpAt = 0;
   private colourReady = false;
   /** set when a setting changes so the new colours apply without delay */
   private colourSnap = false;
@@ -153,6 +156,7 @@ export class FraxApp {
       this.palette = PALETTES.find((p) => p.id === value) ?? PALETTES[0];
       this.engine.setPalette(buildPalette(this.palette));
     } else if (key === 'formula') {
+      this.colourJump();
       this.info = fractalById(value as string);
       this.stopJourney(false);
       this.explorer.reset();
@@ -176,6 +180,7 @@ export class FraxApp {
       y: typeof y === 'number' ? fromNumber(y) : y,
     };
     if (this.settings.formula === 'julia') {
+      this.colourJump();
       this.stopJourney(false);
       this.explorer.reset();
       this.engine.cancelOrbits();
@@ -183,7 +188,16 @@ export class FraxApp {
     this.emit();
   }
 
+  /** Fade through dark into the next view instead of showing it in the old colours. */
+  private colourJump() {
+    if (this.colourReady) {
+      this.dip = -1;
+      this.jumpAt = performance.now();
+    }
+  }
+
   setView(v: View) {
+    this.colourJump();
     this.stopJourney();
     this.zoomAnim = null;
     this.inertia = { vx: 0, vy: 0 };
@@ -315,6 +329,7 @@ export class FraxApp {
       period2: this.period2,
       offset2: this.offset2,
       mix: this.fade < 1 ? this.fade * this.fade * (3 - 2 * this.fade) : 1,
+      dip: this.dip >= 1 ? 1 : Math.max(0, this.dip) ** 2 * (3 - 2 * Math.max(0, this.dip)),
       shade: this.settings.shade,
       mapMode: 0,
       interior: hexToRgb01(this.palette.interior),
@@ -339,8 +354,24 @@ export class FraxApp {
    * fractal) crossfade over a second instead of strobing.
    */
   private updateColourRange(dt: number) {
-    const stats = this.visibleStats();
+    // After a jump, wait (briefly) for a render of the new view before choosing colours.
+    const waiting = this.dip < 0 && performance.now() - this.jumpAt < 2500;
+    const stats = this.visibleStats(waiting ? this.jumpAt : 0);
     if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 1.1);
+    if (this.dip < 0) {
+      // Just jumped somewhere new: stay dark until that view has colour stats, then fade in.
+      if (!stats) {
+        if (!waiting) this.dip = 0;
+        return;
+      }
+      const tp0 = Math.max(2, stats.spread * 0.4, stats.detail * 5) / this.settings.density;
+      this.period = tp0;
+      this.offset = stats.medianN;
+      this.fade = 1;
+      this.dip = 0;
+      return;
+    }
+    if (this.dip < 1) this.dip = Math.min(1, this.dip + dt / 0.6);
     if (!stats) return;
     // Wide enough to span the frame's range, never so tight that bands alias per pixel.
     const tp = Math.max(2, stats.spread * 0.4, stats.detail * 5) / this.settings.density;
@@ -381,11 +412,12 @@ export class FraxApp {
     this.fade = 0;
   }
 
-  private visibleStats(): LayerStats | null {
+  private visibleStats(since = 0): LayerStats | null {
     if (this.journey) return this.journey.currentStats;
     let best: Layer | null = null;
     for (const l of this.explorer.layers) {
-      if (l.status !== 'done' || !l.stats) continue;
+      if (l.status !== 'done' || !l.stats || l.finishedAt < since) continue;
+      if (Math.abs(l.log2w - this.view.log2w) > 3) continue;
       if (!best || Math.abs(l.log2w - this.view.log2w) < Math.abs(best.log2w - this.view.log2w)) best = l;
     }
     return best?.stats ?? null;

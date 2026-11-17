@@ -10,7 +10,7 @@
 </p>
 <p align="center">
   <img src="docs/gallery-3.jpg" width="49%" alt="Seahorse spirals in a Julia set, teal and sand">
-  <img src="docs/gallery-4.jpg" width="49%" alt="Lattice structure deep inside the Burning Ship fractal">
+  <img src="docs/gallery-4.jpg" width="49%" alt="Frosted filaments deep in the Mandelbrot set, in calm blues">
 </p>
 
 ## What it does
@@ -18,7 +18,7 @@
 - **Journey mode** — one button starts a hands-free zoom that keeps going. An autopilot reads each frame, steers towards spirals and filigree, avoids dead ends, and never stops to wait.
 - **Deep zoom** — far past the 10¹⁵ limit of ordinary graphics maths. Frax has been flown beyond 10⁶⁰ and keeps its detail all the way down.
 - **Smooth at 60 fps** — the next stretch of the zoom is rendered ahead of you in the background, so playback never stutters, however deep you are.
-- **Five fractals** — Mandelbrot, Julia (pick any *c*, or open the Julia set of the spot you're looking at), Tricorn, Burning Ship and Multibrot³.
+- **Four fractals** — Mandelbrot, Julia (pick any *c*, or open the Julia set of the spot you're looking at), Tricorn and Multibrot³.
 - **Calm, considered colour** — twelve hand-tuned palettes with perceptually smooth blending and soft relief lighting. Structures keep their colour as you zoom, the range adapts quietly in the background, and colour cycling is there if you want it.
 - **Share any place** — the address bar always holds your exact location, at full precision. Copy the link and anyone can open the same view.
 - **Save it** — high-quality PNG snapshots, and video recording in browsers that support it (Chrome, Edge and Safari).

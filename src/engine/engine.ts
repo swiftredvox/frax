@@ -41,6 +41,7 @@ export interface ColorParams {
   period2: number;
   offset2: number;
   mix: number;
+  dip: number;
   shade: number;
   mapMode: 0 | 1;
   interior: [number, number, number];
@@ -565,6 +566,7 @@ export class Engine {
       .f('uPeriod2', color.period2)
       .f('uOffset2', color.offset2)
       .f('uMix', color.mix)
+      .f('uDip', color.dip)
       .f('uShade', color.shade)
       .i('uMapMode', color.mapMode)
       .v3('uInterior', ...color.interior)
