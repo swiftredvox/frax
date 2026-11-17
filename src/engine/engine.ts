@@ -1,5 +1,5 @@
 import type { HP } from '../core/hp';
-import { bitsFor, diffScaled, pow2 } from '../core/hp';
+import { addScaled, bitsFor, diffScaled, pow2, toNumber } from '../core/hp';
 import { Program, TexPool, type PooledTex } from './gl';
 import { OrbitService, type OrbitResult } from './orbit';
 import type { Formula } from './orbitTypes';
@@ -9,6 +9,8 @@ export interface View {
   cx: HP;
   cy: HP;
   log2w: number; // log2 of the view width in the complex plane
+  /** rotation of the view, radians (screen → plane) */
+  rot?: number;
 }
 
 export interface FractalSpec {
@@ -102,9 +104,15 @@ export class Layer {
 interface RefTex {
   orbit: OrbitResult;
   tex: WebGLTexture;
+  blaAB: WebGLTexture | null;
+  blaR: WebGLTexture | null;
+  blaU: { segS: Int32Array; segL: Int32Array; base: Int32Array; levels: Int32Array; levOff: Int32Array } | null;
   users: number;
   lastUsed: number;
 }
+
+/** BLA tables are built for pixels up to 2^(log2w + margin) from the reference. */
+const BLA_DC_MARGIN = 0.6;
 
 const LAYER_FORMULA: Record<Formula, number> = { mandelbrot: 0, julia: 1, burningship: 2, multibrot3: 3, multibrot4: 4 };
 
@@ -128,6 +136,8 @@ export class Engine {
   private finFbo: WebGLFramebuffer;
   private palTex: WebGLTexture;
   readonly PEND = 32;
+  /** bilinear approximation on/off (on; off is useful for comparisons) */
+  useBla = true;
 
   /** Work budget in pixel-iterations per frame, tuned from frame times. */
   budget = 3e7;
@@ -199,6 +209,24 @@ export class Engine {
 
   // ------------------------------------------------------------------ layers
 
+  /**
+   * Compute and keep a reference orbit for a whole family of views (e.g. a
+   * loop), so every frame can share it. Release it with releaseRef().
+   */
+  async prepareRef(view: View, maxIter: number, spec: FractalSpec, log2DcMax: number, deepestLog2px: number): Promise<object> {
+    const p = bitsFor(deepestLog2px + 4);
+    const orbit = await this.orbits.compute(view.cx, view.cy, p, maxIter, spec.formula, spec.julia, log2DcMax);
+    const r = this.uploadRef(orbit);
+    r.users++; // pinned: never garbage-collected while held
+    return r;
+  }
+
+  releaseRef(handle: object) {
+    const r = handle as RefTex;
+    if (this.refs.includes(r)) r.users = Math.max(0, r.users - 1);
+    this.gcRefs();
+  }
+
   createLayer(view: View, w: number, h: number, maxIter: number, spec: FractalSpec, priority = 0): Layer {
     const L = new Layer(this.nextId++, view, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), maxIter, spec, priority);
     this.layers.push(L);
@@ -208,7 +236,7 @@ export class Engine {
     } else {
       const p = bitsFor(L.log2px + 4);
       this.orbits
-        .compute(view.cx, view.cy, p, maxIter, spec.formula, spec.julia, (f) => (L.orbitProgress = f))
+        .compute(view.cx, view.cy, p, maxIter, spec.formula, spec.julia, view.log2w + BLA_DC_MARGIN, (f) => (L.orbitProgress = f))
         .then((orbit) => {
           const r = this.uploadRef(orbit);
           if (L.status === 'orbit') this.attachRef(L, r);
@@ -227,6 +255,8 @@ export class Engine {
       if (o.formula !== L.spec.formula) continue;
       if (o.formula === 'julia' && o.juliaKey !== juliaKey(L.spec)) continue;
       if (o.p < need) continue;
+      // The shortcut table is only valid for pixels within its design radius.
+      if (o.bla && o.bla.log2DcMax < L.log2w + BLA_DC_MARGIN) continue;
       const truncated = o.seg1 >= o.maxIter + 1 || o.len - o.rebase >= o.maxIter + 1;
       if (truncated && o.maxIter < L.maxIter) continue;
       const dx = diffScaled(o.cx, L.cx, L.log2w);
@@ -248,7 +278,35 @@ export class Engine {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, W, rows, 0, gl.RG, gl.FLOAT, data);
-    const r: RefTex = { orbit, tex, users: 0, lastUsed: performance.now() };
+    const r: RefTex = { orbit, tex, users: 0, lastUsed: performance.now(), blaAB: null, blaR: null, blaU: null };
+    if (orbit.bla) {
+      const b = orbit.bla;
+      const n = b.r.length;
+      const brows = Math.max(1, Math.ceil(n / W));
+      const ab = new Float32Array(W * brows * 4);
+      ab.set(b.ab);
+      const rr = new Float32Array(W * brows);
+      rr.set(b.r);
+      const mk = (ifmt: number, fmt: number, d: Float32Array) => {
+        const t = gl.createTexture()!;
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texImage2D(gl.TEXTURE_2D, 0, ifmt, W, brows, 0, fmt, gl.FLOAT, d);
+        return t;
+      };
+      r.blaAB = mk(gl.RGBA32F, gl.RGBA, ab);
+      r.blaR = mk(gl.R32F, gl.RED, rr);
+      const segS = new Int32Array(2), segL = new Int32Array(2), base = new Int32Array(2), levels = new Int32Array(2), levOff = new Int32Array(64);
+      b.segs.forEach((s, i) => {
+        segS[i] = s.start;
+        segL[i] = s.len;
+        base[i] = s.base;
+        levels[i] = s.levels;
+        s.levOff.forEach((v, l) => (levOff[i * 32 + l] = v));
+      });
+      r.blaU = { segS, segL, base, levels, levOff };
+    }
     this.refs.unshift(r);
     this.gcRefs();
     return r;
@@ -259,6 +317,8 @@ export class Engine {
       const i = this.refs.map((r, i) => [r, i] as const).reverse().find(([r]) => r.users === 0)?.[1];
       if (i === undefined) break;
       this.gl.deleteTexture(this.refs[i].tex);
+      if (this.refs[i].blaAB) this.gl.deleteTexture(this.refs[i].blaAB);
+      if (this.refs[i].blaR) this.gl.deleteTexture(this.refs[i].blaR);
       this.refs.splice(i, 1);
     }
   }
@@ -400,6 +460,9 @@ export class Engine {
       .tex('uOrbit', 2, ref.tex)
       .i('uInit', L.initDone ? 0 : 1)
       .v2('uHalf', L.w / 2, L.h / 2)
+      .v2('uRot', Math.cos(L.view.rot ?? 0), Math.sin(L.view.rot ?? 0))
+      .i('uCardioid', L.spec.formula === 'mandelbrot' && L.log2w > -12 ? 1 : 0)
+      .v2('uCenter', toNumber(L.cx), toNumber(L.cy))
       .f('uPix', pix)
       .v2('uRefOff', rx, ry)
       .f('uE0', e0)
@@ -411,6 +474,9 @@ export class Engine {
       .f('uBail2', 1e4)
       .i('uFormula', LAYER_FORMULA[L.spec.formula])
       .f('uLogPow', Math.log(L.spec.formula === 'multibrot3' ? 3 : L.spec.formula === 'multibrot4' ? 4 : 2));
+    const bu = this.useBla ? ref.blaU : null;
+    p.i('uBla', bu ? 1 : 0).tex('uBlaAB', 3, ref.blaAB).tex('uBlaR', 4, ref.blaR);
+    if (bu) p.ia('uSegS', bu.segS).ia('uSegL', bu.segL).ia('uBlaBase', bu.base).ia('uLevels', bu.levels).ia('uLevOff', bu.levOff);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     L.cur = dst;
@@ -532,10 +598,16 @@ export class Engine {
 
   // -------------------------------------------------------------- display
 
-  composite(cam: View, layers: Layer[], color: ColorParams, flipY = false) {
+  composite(
+    cam: View,
+    layers: Layer[],
+    color: ColorParams,
+    flipY = false,
+    target?: { fbo: WebGLFramebuffer; w: number; h: number; scissor: [number, number, number, number]; gradScale: number },
+  ) {
     const gl = this.gl;
-    const W = this.canvas.width;
-    const H = this.canvas.height;
+    const W = target ? target.w : this.canvas.width;
+    const H = target ? target.h : this.canvas.height;
     const camPx = cam.log2w - Math.log2(W);
     const vis = layers
       .filter((l) => l.displayTex && l.status !== 'disposed')
@@ -544,16 +616,23 @@ export class Engine {
       .slice(0, 4);
     const rects = new Float32Array(16);
     const sizes = new Float32Array(8);
+    const lrot = new Float32Array(8);
     vis.forEach((l, i) => {
       const sx = diffScaled(l.cx, cam.cx, cam.log2w);
       const sy = diffScaled(l.cy, cam.cy, cam.log2w);
       const w = Math.pow(2, l.log2w - cam.log2w);
       rects.set([sx, sy, w, (w * l.h) / l.w], i * 4);
+      lrot.set([Math.cos(l.view.rot ?? 0), Math.sin(l.view.rot ?? 0)], i * 2);
       sizes.set([l.w, l.h], i * 2);
     });
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fbo : null);
     gl.viewport(0, 0, W, H);
+    if (target) {
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(...target.scissor);
+    }
     const p = this.pComp.use();
+    p.f('uGradScale', target ? target.gradScale : 1);
     for (let i = 0; i < 4; i++) p.tex('uL' + i, i, vis[i]?.displayTex ?? null);
     p.tex('uPal', 4, this.palTex)
       .v4a('uRect', rects)
@@ -571,9 +650,100 @@ export class Engine {
       .i('uMapMode', color.mapMode)
       .v3('uInterior', ...color.interior)
       .v3('uBg', ...color.background)
-      .f('uFlipY', flipY ? -1 : 1);
+      .f('uFlipY', flipY ? -1 : 1)
+      .v2('uCamRot', Math.cos(cam.rot ?? 0), Math.sin(cam.rot ?? 0))
+      .v2a('uLRot', lrot);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (target) {
+      gl.disable(gl.SCISSOR_TEST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+  }
+
+  /** Largest poster edge this GPU can render into. */
+  get maxPosterSize() {
+    const gl = this.gl;
+    return Math.min(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE), gl.getParameter(gl.MAX_TEXTURE_SIZE), 16384);
+  }
+
+  /**
+   * Render the view at poster resolution, tile by tile. Each tile is computed
+   * at 2× and filtered down by the compositor's multi-sampling.
+   */
+  async renderPoster(
+    cam: View,
+    W: number,
+    H: number,
+    maxIter: number,
+    spec: FractalSpec,
+    color: ColorParams,
+    flipY: boolean,
+    screenW: number,
+    onProgress: (f: number) => void,
+  ): Promise<HTMLCanvasElement> {
+    const gl = this.gl;
+    const rb = gl.createRenderbuffer()!;
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, W, H);
+    const fbo = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, rb);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    const T = 768;
+    const SS = 2;
+    const cols = Math.ceil(W / T);
+    const rows = Math.ceil(H / T);
+    const rot = cam.rot ?? 0;
+    const cr = Math.cos(rot);
+    const sr = Math.sin(rot);
+    const flip = flipY ? -1 : 1;
+    try {
+      for (let ty = 0; ty < rows; ty++) {
+        for (let tx = 0; tx < cols; tx++) {
+          const x0 = tx * T;
+          const y0 = ty * T;
+          const tw = Math.min(T, W - x0);
+          const th = Math.min(T, H - y0);
+          // Tile centre relative to the poster centre, in units of the view width (y up, flipped for Burning Ship-style sets).
+          const ox = (x0 + tw / 2 - W / 2) / W;
+          const oy = ((y0 + th / 2 - H / 2) / W) * flip;
+          const wx = cr * ox - sr * oy;
+          const wy = sr * ox + cr * oy;
+          const p = bitsFor(cam.log2w - 20);
+          const view: View = {
+            cx: addScaled(cam.cx, wx, cam.log2w, p),
+            cy: addScaled(cam.cy, wy, cam.log2w, p),
+            log2w: cam.log2w + Math.log2((tw + 2) / W),
+            rot,
+          };
+          // A one-pixel apron avoids seams where tiles meet.
+          const L = this.createLayer(view, (tw + 2) * SS, (th + 2) * SS, maxIter, spec, 50);
+          L.tag = 'poster';
+          while (L.status !== 'done' && L.status !== 'failed') await new Promise((r) => requestAnimationFrame(() => r(null)));
+          if (L.status === 'failed') throw new Error('Rendering failed');
+          this.composite(cam, [L], color, flipY, { fbo, w: W, h: H, scissor: [x0, y0, tw, th], gradScale: W / screenW });
+          this.dispose(L);
+          onProgress((ty * cols + tx + 1) / (cols * rows));
+        }
+      }
+      const px = new Uint8Array(W * H * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      const out = document.createElement('canvas');
+      out.width = W;
+      out.height = H;
+      const ctx = out.getContext('2d')!;
+      const img = ctx.createImageData(W, H);
+      const row = W * 4;
+      for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * row, (H - y) * row), y * row);
+      ctx.putImageData(img, 0, 0);
+      return out;
+    } finally {
+      gl.deleteFramebuffer(fbo);
+      gl.deleteRenderbuffer(rb);
+    }
   }
 }
 

@@ -62,6 +62,10 @@ export class Program {
     this.gl.uniform3f(this.loc(name), x, y, z);
     return this;
   }
+  ia(name: string, a: Int32Array) {
+    this.gl.uniform1iv(this.loc(name), a);
+    return this;
+  }
   v4a(name: string, a: Float32Array) {
     this.gl.uniform4fv(this.loc(name), a);
     return this;

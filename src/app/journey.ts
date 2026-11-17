@@ -1,4 +1,5 @@
 import { addScaled, bitsFor, diffScaled, type HP } from '../core/hp';
+import { toScreen, toWorld } from './camera';
 import type { Engine, FractalSpec, Layer, LayerStats, View } from '../engine/engine';
 
 interface Keyframe {
@@ -120,14 +121,15 @@ export class Journey {
     const W = a.view.log2w;
     const log2w = W - f * a.dz;
     const p = bitsFor(log2w - 12);
-    if (!a.next || f === 0) return { cx: a.view.cx, cy: a.view.cy, log2w };
+    if (!a.next || f === 0) return { cx: a.view.cx, cy: a.view.cy, log2w, rot: a.view.rot };
     // Zoom segments: constant on-screen velocity, offset ∝ (1 − 2^−f).
     // Glide segments (no zoom): ease in and out.
     const g = a.dz ? 2 * (1 - Math.pow(2, -f)) : f * f * (3 - 2 * f);
     return {
-      cx: addScaled(a.view.cx, a.next[0] * g, W, p),
-      cy: addScaled(a.view.cy, a.next[1] * g, W, p),
+      cx: addScaled(a.view.cx, toWorld(a.view, a.next[0] * g, a.next[1] * g)[0], W, p),
+      cy: addScaled(a.view.cy, toWorld(a.view, a.next[0] * g, a.next[1] * g)[1], W, p),
       log2w,
+      rot: a.view.rot,
     };
   }
 
@@ -173,7 +175,8 @@ export class Journey {
         this.velocity = [0, 0];
         this.target = null;
         const p0 = bitsFor(W - 12);
-        this.addKeyframe({ cx: addScaled(k.view.cx, k.next[0], W, p0), cy: addScaled(k.view.cy, k.next[1], W, p0), log2w: W });
+        const [gx, gy] = toWorld(k.view, k.next[0], k.next[1]);
+        this.addKeyframe({ cx: addScaled(k.view.cx, gx, W, p0), cy: addScaled(k.view.cy, gy, W, p0), log2w: W, rot: k.view.rot });
         return;
       }
     }
@@ -182,8 +185,7 @@ export class Journey {
     let best = cells[0];
     let keep = false;
     if (this.target) {
-      const rx = diffScaled(this.target.x, k.view.cx, W);
-      const ry = diffScaled(this.target.y, k.view.cy, W);
+      const [rx, ry] = toScreen(k.view, diffScaled(this.target.x, k.view.cx, W), diffScaled(this.target.y, k.view.cy, W));
       if (Math.abs(rx) < 0.45 && Math.abs(ry) < 0.45 * asp) {
         const c = nearestCell(cells, rx, ry);
         if (c && c.score > best.score * 0.7 && c.score > 0) keep = true;
@@ -207,13 +209,13 @@ export class Journey {
       const jx = (this.rng() - 0.5) * best.cw * 0.3;
       const jy = (this.rng() - 0.5) * best.ch * 0.3;
       const p = bitsFor(W - 20);
-      this.target = { x: addScaled(k.view.cx, best.x + jx, W, p), y: addScaled(k.view.cy, best.y + jy, W, p) };
+      const [tx, ty] = toWorld(k.view, best.x + jx, best.y + jy);
+      this.target = { x: addScaled(k.view.cx, tx, W, p), y: addScaled(k.view.cy, ty, W, p) };
     }
 
     // ---- steer towards it: proportional, rate-limited, inside the safe box ----
     const tgt = this.target!;
-    const rx = diffScaled(tgt.x, k.view.cx, W);
-    const ry = diffScaled(tgt.y, k.view.cy, W);
+    const [rx, ry] = toScreen(k.view, diffScaled(tgt.x, k.view.cx, W), diffScaled(tgt.y, k.view.cy, W));
     const lim = 0.22;
     const want: [number, number] = [clamp(rx * 0.75, -lim, lim), clamp(ry * 0.75, -lim * asp, lim * asp)];
     const acc = 0.07;
@@ -233,9 +235,10 @@ export class Journey {
 
     const p = bitsFor(W - 1 - 12);
     this.addKeyframe({
-      cx: addScaled(k.view.cx, k.next[0], W, p),
-      cy: addScaled(k.view.cy, k.next[1], W, p),
+      cx: addScaled(k.view.cx, toWorld(k.view, k.next[0], k.next[1])[0], W, p),
+      cy: addScaled(k.view.cy, toWorld(k.view, k.next[0], k.next[1])[1], W, p),
       log2w: W - 1,
+      rot: k.view.rot,
     });
   }
 

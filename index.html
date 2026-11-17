@@ -38,13 +38,25 @@
           <span class="ji ji-pause"></span>
           <span class="journey-label">Journey</span>
         </button>
-        <div class="speed" title="Journey speed">
+        <button class="loop-btn" id="btnLoop" aria-pressed="false" title="Loop (L): dive into a hidden copy of the Mandelbrot set that flows back to the start, forever">
+          <span class="li-icon" data-icon="infinity"></span>
+          <span class="loop-label">Loop</span>
+        </button>
+        <div class="speed" title="Zoom speed (Journey and Loop)">
           <input type="range" id="speed" min="0.15" max="2" step="0.05" aria-label="Journey speed" />
           <span class="speed-val" id="speedVal"></span>
         </div>
         <span class="sep"></span>
+        <button class="icon-btn" id="btnDest" title="Destinations (D)" data-icon="compass" aria-expanded="false" aria-controls="dest"></button>
         <button class="icon-btn" id="btnHome" title="Back to the start (H)" data-icon="home"></button>
-        <button class="icon-btn" id="btnShot" title="Save image (S)" data-icon="camera"></button>
+        <div class="menu-wrap">
+          <button class="icon-btn" id="btnShot" title="Save an image" data-icon="camera" aria-haspopup="menu" aria-expanded="false"></button>
+          <div class="menu glass" id="shotMenu" role="menu" hidden>
+            <button role="menuitem" data-shot="screen"><b>Snapshot</b><span>What's on screen · S</span></button>
+            <button role="menuitem" data-shot="3840"><b>4K poster</b><span>3840 px, extra-sharp</span></button>
+            <button role="menuitem" data-shot="7680"><b>8K poster</b><span>7680 px, for printing</span></button>
+          </div>
+        </div>
         <button class="icon-btn" id="btnRec" title="Record video (R)" data-icon="record" hidden></button>
         <button class="icon-btn" id="btnShare" title="Copy link to this place" data-icon="link"></button>
         <button class="icon-btn" id="btnFull" title="Full screen (F)" data-icon="expand"></button>
@@ -74,6 +86,12 @@
           </section>
 
           <section>
+            <h3>Loop</h3>
+            <p class="section-note">Loop dives into a tiny copy of the Mandelbrot set. The copy looks just like the start, so the zoom flows back round and repeats forever.</p>
+            <div class="loops" id="loops" role="radiogroup" aria-label="Loop"></div>
+          </section>
+
+          <section>
             <h3>Colour</h3>
             <div class="palettes" id="palettes"></div>
             <label class="slider" title="How many colour bands span the view"><span>Bands</span><input type="range" id="density" min="0.15" max="3" step="0.01" /></label>
@@ -90,11 +108,24 @@
           </section>
 
           <section class="about">
-            <p>Drag to look around, scroll or pinch to zoom, double-click to dive. <kbd>Space</kbd> journey · <kbd>H</kbd> home · <kbd>S</kbd> save · <kbd>[</kbd> <kbd>]</kbd> palette · <kbd>F</kbd> full screen.</p>
+            <p>Drag to look around, scroll or pinch to zoom, double-click to dive. <kbd>Space</kbd> journey · <kbd>L</kbd> loop · <kbd>D</kbd> destinations · <kbd>H</kbd> home · <kbd>S</kbd> save · <kbd>[</kbd> <kbd>]</kbd> palette · <kbd>F</kbd> full screen.</p>
             <p class="small"><a href="https://github.com/swiftredvox/frax" target="_blank" rel="noopener">Frax on GitHub</a> · MIT licence</p>
           </section>
         </div>
       </aside>
+
+      <div class="dest-wrap" id="dest" hidden>
+        <section class="dest glass" role="dialog" aria-modal="true" aria-labelledby="destTitle">
+          <div class="dest-head">
+            <div>
+              <h2 id="destTitle">Destinations</h2>
+              <p>Hand-picked places to visit. Start a journey from any of them.</p>
+            </div>
+            <button class="icon-btn small" id="btnDestClose" title="Close" data-icon="close"></button>
+          </div>
+          <div class="dest-grid" id="destGrid"></div>
+        </section>
+      </div>
 
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="error" id="error" hidden></div>

@@ -14,26 +14,47 @@ export function zoomAt(v: View, ax: number, ay: number, dlog2: number): View {
   const k = 1 - Math.pow(2, dlog2);
   const nl = v.log2w + dlog2;
   const p = bitsFor(nl - 12);
+  const [wx, wy] = toWorld(v, ax, ay);
   return {
-    cx: addScaled(v.cx, ax * k, v.log2w, p),
-    cy: addScaled(v.cy, ay * k, v.log2w, p),
+    cx: addScaled(v.cx, wx * k, v.log2w, p),
+    cy: addScaled(v.cy, wy * k, v.log2w, p),
     log2w: nl,
+    rot: v.rot,
   };
+}
+
+/** Screen-aligned offset → plane-aligned offset for a (possibly rotated) view. */
+export function toWorld(v: View, x: number, y: number): [number, number] {
+  const r = v.rot ?? 0;
+  if (!r) return [x, y];
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  return [c * x - s * y, s * x + c * y];
+}
+
+/** Plane-aligned offset → screen-aligned offset. */
+export function toScreen(v: View, x: number, y: number): [number, number] {
+  const r = v.rot ?? 0;
+  if (!r) return [x, y];
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  return [c * x + s * y, -s * x + c * y];
 }
 
 /** Move the view centre by (dx, dy) in units of the view width. */
 export function pan(v: View, dx: number, dy: number): View {
   const p = bitsFor(v.log2w - 12);
-  return { cx: addScaled(v.cx, dx, v.log2w, p), cy: addScaled(v.cy, dy, v.log2w, p), log2w: v.log2w };
+  const [wx, wy] = toWorld(v, dx, dy);
+  return { cx: addScaled(v.cx, wx, v.log2w, p), cy: addScaled(v.cy, wy, v.log2w, p), log2w: v.log2w, rot: v.rot };
 }
 
 export function sameView(a: View, b: View) {
-  return a.log2w === b.log2w && a.cx.m === b.cx.m && a.cx.p === b.cx.p && a.cy.m === b.cy.m && a.cy.p === b.cy.p;
+  return a.log2w === b.log2w && (a.rot ?? 0) === (b.rot ?? 0) && a.cx.m === b.cx.m && a.cx.p === b.cx.p && a.cy.m === b.cy.m && a.cy.p === b.cy.p;
 }
 
 export function trimView(v: View): View {
   const p = bitsFor(v.log2w - 12);
-  return { cx: withPrecision(v.cx, p), cy: withPrecision(v.cy, p), log2w: v.log2w };
+  return { cx: withPrecision(v.cx, p), cy: withPrecision(v.cy, p), log2w: v.log2w, rot: v.rot };
 }
 
 /** Human readable magnification, e.g. "3.2 × 10^42". */

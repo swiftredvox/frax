@@ -5,7 +5,9 @@ import { fromDecimal, toDecimal } from '../core/hp';
 import { PALETTES, paletteCss } from '../engine/palettes';
 import { hydrateIcons, icon } from './icons';
 import { download, Recorder, recordingMime } from './recorder';
-import { encodeState } from './share';
+import { encodeState, goToDestination } from './share';
+import { DESTINATIONS } from '../app/destinations';
+import { LOOPS, loopDepth, type LoopTarget } from '../app/loops';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -31,6 +33,8 @@ export class UI {
     this.buildFractals();
     this.buildPalettes();
     this.buildJuliaPresets();
+    this.buildDestinations();
+    this.buildLoops();
     this.bindDock();
     this.bindPanel();
     this.bindKeys();
@@ -122,6 +126,88 @@ export class UI {
     };
   }
 
+  private buildDestinations() {
+    const grid = $('destGrid');
+    for (const d of DESTINATIONS) {
+      const mag = magnification(-d.z, 0);
+      const depth = mag.exp ? `×${mag.mant}·10<sup>${mag.exp}</sup>` : mag.plain;
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        `<button class="card-go" title="Go to ${d.name}">` +
+        `<img src="./destinations/${d.id}.jpg" alt="" loading="lazy" decoding="async">` +
+        `<span class="card-text"><b>${d.name}</b><span>${d.note}</span></span></button>` +
+        `<span class="card-meta">${fractalName(d.formula)} · ${depth}</span>` +
+        `<button class="card-journey" title="Start a journey from ${d.name}">${icon('play')}Journey</button>`;
+      card.querySelector<HTMLButtonElement>('.card-go')!.onclick = () => {
+        this.toggleDest(false);
+        goToDestination(this.app, d);
+        this.dismissHint();
+      };
+      card.querySelector<HTMLButtonElement>('.card-journey')!.onclick = () => {
+        this.toggleDest(false);
+        goToDestination(this.app, d);
+        this.dismissHint();
+        // Let the dip-to-dark land on the new place before setting off.
+        setTimeout(() => this.app.startJourney(), 700);
+      };
+      grid.appendChild(card);
+    }
+    $('btnDest').onclick = () => this.toggleDest();
+    $('btnDestClose').onclick = () => this.toggleDest(false);
+    $('dest').addEventListener('pointerdown', (e) => {
+      if (e.target === $('dest')) this.toggleDest(false);
+    });
+  }
+
+  private buildLoops() {
+    const box = $('loops');
+    const add = (id: string, label: string, title: string) => {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.setAttribute('role', 'radio');
+      b.dataset.id = id;
+      b.textContent = label;
+      b.title = title;
+      b.onclick = () => {
+        this.app.set('loop', id);
+        if (this.app.isLoop) this.announceLoop(this.app.startLoop());
+      };
+      box.appendChild(b);
+    };
+    add('shuffle', 'Shuffle', 'A different loop each time');
+    for (const l of LOOPS) {
+      const m = magnification(-loopDepth(l), 0);
+      add(l.id, l.name, `${l.name}: a copy 10${sup(m.exp)} times smaller`);
+    }
+    $('btnLoop').onclick = () => this.toggleLoop();
+  }
+
+  private toggleLoop() {
+    const t = this.app.toggleLoop();
+    if (t) this.announceLoop(t);
+    this.dismissHint();
+  }
+
+  private announceLoop(t: LoopTarget) {
+    const m = magnification(-loopDepth(t), 0);
+    this.toast(`Loop · ${t.name} — down to 10${sup(m.exp)} and back, forever`);
+  }
+
+  toggleDest(force?: boolean) {
+    const w = $('dest');
+    const open = force ?? w.hidden === true;
+    w.hidden = !open;
+    $('btnDest').setAttribute('aria-expanded', String(open));
+    $('btnDest').classList.toggle('on', open);
+    if (open) {
+      this.togglePanel(false);
+      this.app.stopJourney();
+      this.app.stopLoop();
+      (w.querySelector('.card-go') as HTMLElement | null)?.focus({ preventScroll: true });
+    }
+  }
+
   // ------------------------------------------------------------ dock
 
   private bindDock() {
@@ -133,7 +219,23 @@ export class UI {
     const speed = $<HTMLInputElement>('speed');
     speed.oninput = () => app.set('speed', parseFloat(speed.value));
     $('btnHome').onclick = () => app.home();
-    $('btnShot').onclick = () => this.screenshot();
+    $('btnShot').onclick = (e) => {
+      e.stopPropagation();
+      this.toggleShotMenu();
+    };
+    $('shotMenu')
+      .querySelectorAll<HTMLButtonElement>('button')
+      .forEach((b) => {
+        b.onclick = () => {
+          this.toggleShotMenu(false);
+          const v = b.dataset.shot!;
+          if (v === 'screen') this.screenshot();
+          else this.poster(parseInt(v, 10));
+        };
+      });
+    document.addEventListener('pointerdown', (e) => {
+      if (!(e.target as HTMLElement).closest('.menu-wrap')) this.toggleShotMenu(false);
+    });
     $('btnShare').onclick = () => this.share();
     $('btnFull').onclick = () => this.fullscreen();
     $('btnPanel').onclick = () => this.togglePanel();
@@ -200,7 +302,11 @@ export class UI {
       } else if (k === 'Tab') {
         e.preventDefault();
         this.togglePanel();
-      } else if (k === 'Escape') this.togglePanel(false);
+      } else if (k === 'Escape') {
+        this.togglePanel(false);
+        this.toggleDest(false);
+      } else if (k === 'd' || k === 'D') this.toggleDest();
+      else if (k === 'l' || k === 'L') this.toggleLoop();
       else if (k === '+' || k === '=') app.zoomBy(0, 0, -1);
       else if (k === '-' || k === '_') app.zoomBy(0, 0, 1);
       else return;
@@ -222,7 +328,7 @@ export class UI {
     clearTimeout(this.idleTimer);
     this.idleTimer = window.setTimeout(() => {
       // Only fade the interface away while watching a journey.
-      if (this.app.isJourney && $('panel').hidden) document.body.classList.add('idle');
+      if (this.app.isPlaying && $('panel').hidden && $('dest').hidden) document.body.classList.add('idle');
     }, 2800);
   }
 
@@ -231,15 +337,22 @@ export class UI {
   private sync() {
     const s = this.app.settings;
     const j = this.app.isJourney;
+    const lp = this.app.isLoop;
+    const lb = $('btnLoop');
+    lb.setAttribute('aria-pressed', String(lp));
+    lb.querySelector('.loop-label')!.textContent = lp ? 'Pause' : 'Loop';
+    $('loops')
+      .querySelectorAll<HTMLElement>('.chip')
+      .forEach((b) => b.setAttribute('aria-checked', String(b.dataset.id === s.loop)));
     const jb = $('btnJourney');
     jb.setAttribute('aria-pressed', String(j));
     jb.querySelector('.journey-label')!.textContent = j ? 'Pause' : 'Journey';
-    if (j) this.wake();
+    if (j || lp) this.wake();
     else if (this.wasJourney) {
       document.body.classList.remove('idle');
       this.onView();
     }
-    this.wasJourney = j;
+    this.wasJourney = j || lp;
 
     const speed = $<HTMLInputElement>('speed');
     speed.value = String(s.speed);
@@ -287,7 +400,7 @@ export class UI {
       this.lastDepthText = html;
       $('depthM').innerHTML = html;
     }
-    if (!this.app.isJourney) {
+    if (!this.app.isPlaying) {
       clearTimeout(this.hashTimer);
       this.hashTimer = window.setTimeout(() => history.replaceState(null, '', encodeState(this.app)), 700);
     }
@@ -299,8 +412,8 @@ export class UI {
     const el = $('status');
     const deep = -this.app.view.log2w > 40;
     let text = '';
-    if (this.app.isJourney && st.stalled) text = 'Rendering ahead…';
-    else if (!this.app.isJourney && st.rendering) text = st.orbit && deep ? 'Computing reference orbit…' : 'Rendering…';
+    if (this.app.isPlaying && st.stalled) text = 'Rendering ahead…';
+    else if (!this.app.isPlaying && st.rendering) text = st.orbit && deep ? 'Computing reference orbit…' : 'Rendering…';
     el.classList.toggle('on', !!text);
     if (text) el.title = text;
     if (this.recorder?.active) {
@@ -317,6 +430,7 @@ export class UI {
     p.hidden = !open;
     $('btnPanel').setAttribute('aria-expanded', String(open));
     $('btnPanel').classList.toggle('on', open);
+    if (open) this.toggleDest(false);
   }
 
   private dismissHint() {
@@ -334,6 +448,29 @@ export class UI {
     const m = magnification(this.app.view.log2w, this.app.homeLog2w);
     const z = m.exp ? `1e${m.exp}` : m.plain.replace(/[×,]/g, '');
     return `frax-${this.app.settings.formula}-${z}`;
+  }
+
+  private toggleShotMenu(force?: boolean) {
+    const m = $('shotMenu');
+    const open = force ?? m.hidden === true;
+    m.hidden = !open;
+    $('btnShot').setAttribute('aria-expanded', String(open));
+  }
+
+  private async poster(edge: number) {
+    if (this.app.posterBusy) return;
+    const label = edge >= 7000 ? '8K' : '4K';
+    this.toast(`Rendering ${label} poster…`, 600000);
+    try {
+      const canvas = await this.app.poster(edge, (f) => this.toast(`Rendering ${label} poster… ${Math.round(f * 100)}%`, 600000));
+      this.toast('Saving…', 600000);
+      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
+      if (!blob) throw new Error('encode');
+      download(blob, `${this.fileStem()}-${label}.png`);
+      this.toast(`${label} poster saved (${canvas.width}×${canvas.height})`);
+    } catch {
+      this.toast('The poster couldn’t be rendered on this device');
+    }
   }
 
   screenshot() {
@@ -379,12 +516,12 @@ export class UI {
     else document.documentElement.requestFullscreen?.().catch(() => this.toast('Full screen isn’t available here'));
   }
 
-  toast(msg: string) {
+  toast(msg: string, ms = 2200) {
     const t = $('toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => t.classList.remove('show'), 2200);
+    this.toastTimer = window.setTimeout(() => t.classList.remove('show'), ms);
   }
 }
 
@@ -393,6 +530,14 @@ export function showFatal(err: unknown) {
   el.hidden = false;
   const msg = err instanceof Error ? err.message : String(err);
   el.innerHTML = `<div><b>Frax can’t start here</b>${escapeHtml(msg)}<br/><br/>Frax needs a browser with WebGL2 and float render targets — recent Chrome, Edge, Firefox or Safari.</div>`;
+}
+
+function sup(n: number) {
+  return String(n).replace(/[0-9-]/g, (d) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+d] ?? '⁻');
+}
+
+function fractalName(id: string) {
+  return FRACTALS.find((f) => f.id === id)?.name ?? id;
 }
 
 function escapeHtml(s: string) {

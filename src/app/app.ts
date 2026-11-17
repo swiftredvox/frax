@@ -7,6 +7,8 @@ import { Explorer } from './explorer';
 import { DEFAULT_JULIA, fractalById, type FractalInfo } from './fractals';
 import { attachInput } from './input';
 import { Journey } from './journey';
+import { LoopRun } from './loop';
+import { LOOPS, type LoopTarget } from './loops';
 
 export interface Settings {
   formula: Formula;
@@ -15,6 +17,7 @@ export interface Settings {
   cycle: number; // palette cycling speed
   shade: number; // 0..1 relief lighting
   speed: number; // journey speed, octaves per second
+  loop: string; // chosen loop id, or 'shuffle'
   quality: number; // render scale
   detail: number; // iteration multiplier
 }
@@ -26,11 +29,48 @@ export const DEFAULT_SETTINGS: Settings = {
   cycle: 0,
   shade: 0.9,
   speed: 0.55,
+  loop: 'shuffle',
   quality: 1,
   detail: 1,
 };
 
 type Listener = () => void;
+
+/** Settings remembered between visits. Location and fractal type are not. */
+const PREF_KEYS = ['palette', 'density', 'cycle', 'shade', 'speed', 'quality', 'loop'] as const;
+const PREF_STORE = 'frax.prefs.v1';
+
+function loadPrefs(): Partial<Settings> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREF_STORE) || '{}') as Record<string, unknown>;
+    const out: Partial<Settings> = {};
+    for (const k of PREF_KEYS) {
+      const v = raw[k];
+      const ok =
+        k === 'palette'
+          ? typeof v === 'string' && PALETTES.some((p) => p.id === v)
+          : k === 'loop'
+            ? typeof v === 'string' && (v === 'shuffle' || LOOPS.some((l) => l.id === v))
+            : typeof v === 'number' && Number.isFinite(v);
+      if (ok) {
+        (out as Record<string, unknown>)[k] = v;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function savePrefs(s: Settings) {
+  try {
+    const out: Record<string, unknown> = {};
+    for (const k of PREF_KEYS) out[k] = s[k];
+    localStorage.setItem(PREF_STORE, JSON.stringify(out));
+  } catch {
+    /* storage unavailable — preferences just won't persist */
+  }
+}
 
 export class FraxApp {
   readonly engine: Engine;
@@ -39,6 +79,8 @@ export class FraxApp {
   julia = { ...DEFAULT_JULIA };
   info: FractalInfo;
   journey: Journey | null = null;
+  loop: LoopRun | null = null;
+  private lastLoopId = '';
   readonly explorer: Explorer;
   palette: Palette;
 
@@ -61,6 +103,10 @@ export class FraxApp {
   private viewListeners = new Set<Listener>();
   private hoverFn: ((ax: number, ay: number) => void) | null = null;
   fps = 60;
+  private lastColor: ColorParams | null = null;
+  posterBusy = false;
+  /** true while applying a shared link, so its palette doesn't overwrite saved preferences */
+  applyingLink = false;
   paused = false;
   private captureHook: ((c: HTMLCanvasElement) => void) | null = null;
 
@@ -68,7 +114,7 @@ export class FraxApp {
     readonly canvas: HTMLCanvasElement,
     settings: Partial<Settings> = {},
   ) {
-    this.settings = { ...DEFAULT_SETTINGS, ...settings };
+    this.settings = { ...DEFAULT_SETTINGS, ...loadPrefs(), ...settings };
     this.engine = new Engine(canvas);
     this.info = fractalById(this.settings.formula);
     this.view = homeView(this.info.home);
@@ -85,7 +131,10 @@ export class FraxApp {
     new ResizeObserver(() => this.resize()).observe(canvas);
 
     attachInput(canvas, {
-      interact: () => this.stopJourney(),
+      interact: () => {
+        this.stopJourney();
+        this.stopLoop();
+      },
       zoom: (ax, ay, d, smooth) => this.zoomBy(ax, ay, d, smooth),
       pan: (dx, dy) => {
         this.inertia = { vx: 0, vy: 0 };
@@ -116,6 +165,15 @@ export class FraxApp {
 
   get isJourney() {
     return this.journey !== null;
+  }
+
+  get isLoop() {
+    return this.loop !== null;
+  }
+
+  /** Either autopilot is driving the camera. */
+  get isPlaying() {
+    return this.journey !== null || this.loop !== null;
   }
 
   onChange(fn: Listener) {
@@ -159,6 +217,7 @@ export class FraxApp {
       this.colourJump();
       this.info = fractalById(value as string);
       this.stopJourney(false);
+      this.stopLoop(false);
       this.explorer.reset();
       this.engine.cancelOrbits();
       this.view = homeView(this.info.home);
@@ -170,7 +229,9 @@ export class FraxApp {
       this.explorer.invalidate();
     } else if (key === 'speed') {
       this.journey?.setOptions({ speed: value as number });
+      this.loop?.setOptions({ speed: value as number });
     }
+    if (!this.applyingLink && (PREF_KEYS as readonly string[]).includes(key)) savePrefs(this.settings);
     this.emit();
   }
 
@@ -199,6 +260,7 @@ export class FraxApp {
   setView(v: View) {
     this.colourJump();
     this.stopJourney();
+    this.stopLoop();
     this.zoomAnim = null;
     this.inertia = { vx: 0, vy: 0 };
     this.view = trimView(v);
@@ -227,6 +289,7 @@ export class FraxApp {
 
   startJourney(seed?: number) {
     if (this.journey) return;
+    this.stopLoop();
     const js = this.info.journeyStart;
     if (js && this.view.log2w >= this.homeLog2w - 0.5) this.view = homeView(js);
     this.zoomAnim = null;
@@ -261,9 +324,86 @@ export class FraxApp {
     this.emit();
   }
 
+  /** Start a loop (Mandelbrot only). Returns the loop chosen. */
+  startLoop(id?: string): LoopTarget {
+    this.stopJourney();
+    this.stopLoop(false);
+    if (this.settings.formula !== 'mandelbrot') this.set('formula', 'mandelbrot');
+    const choice = id ?? this.settings.loop;
+    let target = LOOPS.find((l) => l.id === choice);
+    if (!target) {
+      const pool = LOOPS.filter((l) => l.id !== this.lastLoopId);
+      target = pool[Math.floor(Math.random() * pool.length)];
+    }
+    this.lastLoopId = target.id;
+    this.zoomAnim = null;
+    this.inertia = { vx: 0, vy: 0 };
+    const atHome = Math.abs(this.view.log2w - this.homeLog2w) < 0.05 && !(this.view.rot ?? 0);
+    if (!atHome) this.colourJump();
+    this.loop = new LoopRun(
+      this.engine,
+      target,
+      this.spec,
+      { x: this.info.home.x, y: this.info.home.y, log2w: this.homeLog2w },
+      () => this.renderSize,
+      { speed: this.settings.speed, quality: Math.max(1, this.settings.quality) },
+      (l) => this.iterBase(l),
+    );
+    this.view = this.loop.viewAt(0);
+    this.emitView();
+    this.emit();
+    return target;
+  }
+
+  stopLoop(keepLayers = true) {
+    const l = this.loop;
+    if (!l) return;
+    this.loop = null;
+    const done = l.allLayers.filter((x) => x.status === 'done');
+    if (keepLayers) {
+      l.dispose((x) => done.includes(x));
+      this.explorer.inherit(done);
+    } else l.dispose();
+    this.emit();
+  }
+
+  toggleLoop(): LoopTarget | null {
+    if (this.loop) {
+      this.stopLoop();
+      return null;
+    }
+    return this.startLoop();
+  }
+
   toggleJourney() {
     if (this.journey) this.stopJourney();
     else this.startJourney();
+  }
+
+  /**
+   * Render the current view as a poster whose long edge is `longEdge` pixels,
+   * matching the screen's shape. Playback pauses while it renders.
+   */
+  async poster(longEdge: number, onProgress: (f: number) => void): Promise<HTMLCanvasElement> {
+    if (this.posterBusy) throw new Error('A poster is already rendering');
+    this.posterBusy = true;
+    const wasPaused = this.paused;
+    this.paused = true;
+    try {
+      const edge = Math.min(longEdge, this.engine.maxPosterSize);
+      const { w, h } = this.renderSize;
+      const W = w >= h ? edge : Math.round((edge * w) / h);
+      const H = w >= h ? Math.round((edge * h) / w) : edge;
+      // Use at least the detail currently on screen.
+      let it = this.maxIterFor(this.view);
+      const all = [...(this.loop?.allLayers ?? []), ...(this.journey?.allLayers ?? []), ...this.explorer.layers];
+      for (const l of all) if (Math.abs(l.log2w - this.view.log2w) < 2) it = Math.max(it, l.maxIter);
+      const color = { ...this.lastColor!, mix: 1, dip: 1 };
+      return await this.engine.renderPoster(this.view, W, H, it, this.spec, color, this.info.flipY, w, onProgress);
+    } finally {
+      this.paused = wasPaused;
+      this.posterBusy = false;
+    }
   }
 
   /** Render the current frame and hand the canvas to `fn` (for screenshots / recording). */
@@ -292,7 +432,10 @@ export class FraxApp {
     if (dtMs > 0) this.fps = this.fps * 0.92 + (1000 / dtMs) * 0.08;
 
     // Camera motion
-    if (this.journey) {
+    if (this.loop) {
+      this.view = this.paused ? this.loop.viewAt(this.loop.u) : this.loop.update(dt);
+      this.emitView();
+    } else if (this.journey) {
       if (!this.paused) this.view = this.journey.update(dt);
       else this.view = this.journey.camera();
       this.emitView();
@@ -335,7 +478,12 @@ export class FraxApp {
       interior: hexToRgb01(this.palette.interior),
       background: hexToRgb01(this.palette.interior),
     };
-    const layers: Layer[] = this.journey ? [...this.journey.layers, ...this.explorer.layers] : this.explorer.layers;
+    const layers: Layer[] = this.loop
+      ? [...this.loop.layers, ...this.explorer.layers]
+      : this.journey
+        ? [...this.journey.layers, ...this.explorer.layers]
+        : this.explorer.layers;
+    this.lastColor = color;
     this.engine.composite(this.view, layers, color, this.info.flipY);
 
     if (this.captureHook) {
@@ -354,6 +502,21 @@ export class FraxApp {
    * fractal) crossfade over a second instead of strobing.
    */
   private updateColourRange(dt: number) {
+    if (this.loop) {
+      // Loops colour by the iteration range of the frame itself, so the copy at
+      // the end is coloured exactly like the full set at the start.
+      const sp = this.loop.statsPair;
+      if (this.dip < 0) this.dip = 0;
+      if (this.dip < 1) this.dip = Math.min(1, this.dip + dt / 0.6);
+      this.fade = 1;
+      if (sp) {
+        const tp = (s: LayerStats) => Math.max(2, s.spread * 0.4, s.detail * 5) / this.settings.density;
+        this.period = Math.exp(Math.log(tp(sp.a)) * (1 - sp.f) + Math.log(tp(sp.b)) * sp.f);
+        this.offset = sp.a.medianN * (1 - sp.f) + sp.b.medianN * sp.f;
+        this.colourReady = true;
+      }
+      return;
+    }
     // After a jump, wait (briefly) for a render of the new view before choosing colours.
     const waiting = this.dip < 0 && performance.now() - this.jumpAt < 2500;
     const stats = this.visibleStats(waiting ? this.jumpAt : 0);
@@ -425,7 +588,7 @@ export class FraxApp {
 
   /** Busy state for the UI: rendering progress of the current view. */
   get status(): { rendering: boolean; stalled: boolean; orbit: boolean } {
-    const rendering = this.journey ? !!this.journey.pendingLayer : this.explorer.busy;
-    return { rendering, stalled: !!this.journey?.stalled, orbit: this.engine.orbitBusy };
+    const rendering = this.loop ? !!this.loop.pendingLayer : this.journey ? !!this.journey.pendingLayer : this.explorer.busy;
+    return { rendering, stalled: !!(this.journey?.stalled || this.loop?.stalled), orbit: this.engine.orbitBusy };
   }
 }

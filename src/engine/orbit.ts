@@ -1,12 +1,13 @@
 import type { HP } from '../core/hp';
 import { withPrecision } from '../core/hp';
-import type { Formula, OrbitRequest, OrbitResponse } from './orbitTypes';
+import type { BlaData, Formula, OrbitRequest, OrbitResponse } from './orbitTypes';
 
 export interface OrbitResult {
   z: Float32Array;
   len: number;
   seg1: number;
   rebase: number;
+  bla: BlaData | null;
   maxIter: number;
   p: number;
   cx: HP;
@@ -52,6 +53,7 @@ export class OrbitService {
         len: d.len,
         seg1: d.seg1,
         rebase: d.rebase,
+        bla: d.bla,
         maxIter: a.req.maxIter,
         p: a.req.p,
         cx: a.cx,
@@ -80,6 +82,7 @@ export class OrbitService {
     maxIter: number,
     formula: Formula,
     julia: { x: HP; y: HP },
+    log2DcMax: number,
     onProgress?: (f: number) => void,
   ): Promise<OrbitResult> {
     const x = withPrecision(cx, p);
@@ -95,6 +98,7 @@ export class OrbitService {
       power: formula === 'multibrot3' ? 3 : formula === 'multibrot4' ? 4 : 2,
       juliaX: withPrecision(julia.x, p).m,
       juliaY: withPrecision(julia.y, p).m,
+      log2DcMax,
     };
     const juliaKey = formula === 'julia' ? `${julia.x.m}/${julia.x.p},${julia.y.m}/${julia.y.p}` : '';
     return new Promise((resolve, reject) => {

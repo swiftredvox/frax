@@ -11,6 +11,15 @@ export interface OrbitRequest {
   power: number;
   juliaX: bigint;
   juliaY: bigint;
+  /** log2 of the largest pixel offset from the reference the BLA table must cover */
+  log2DcMax: number;
+}
+
+export interface BlaData {
+  ab: Float32Array;
+  r: Float32Array;
+  segs: { start: number; len: number; base: number; levels: number; levOff: number[] }[];
+  log2DcMax: number;
 }
 
 export interface OrbitResponse {
@@ -22,4 +31,5 @@ export interface OrbitResponse {
   seg1: number;
   /** index of the critical orbit used for rebasing (0 when it is the view orbit) */
   rebase: number;
+  bla: BlaData | null;
 }
