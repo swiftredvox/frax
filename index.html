@@ -22,9 +22,9 @@
       <header class="brand glass-soft" id="brand">
         <div class="wordmark">frax</div>
         <div class="depth" id="depth" title="Magnification">
-          <span class="depth-x">×</span><span class="depth-m" id="depthM">1.00</span><span class="depth-e" id="depthE"></span>
+          <span class="depth-x">×</span><span class="depth-m" id="depthM">1.00</span>
         </div>
-        <div class="status" id="status"><span class="spinner"></span><span id="statusText">Rendering</span></div>
+        <span class="status" id="status" role="status" aria-label="Rendering"><span class="spinner"></span></span>
       </header>
 
       <div class="hint" id="hint">
@@ -76,9 +76,10 @@
           <section>
             <h3>Colour</h3>
             <div class="palettes" id="palettes"></div>
-            <label class="slider"><span>Bands</span><input type="range" id="density" min="0.25" max="4" step="0.01" /></label>
-            <label class="slider"><span>Flow</span><input type="range" id="cycle" min="0" max="0.4" step="0.005" /></label>
-            <label class="slider"><span>Relief</span><input type="range" id="shade" min="0" max="1" step="0.01" /></label>
+            <label class="slider" title="How many colour bands span the view"><span>Bands</span><input type="range" id="density" min="0.15" max="3" step="0.01" /></label>
+            <label class="slider" title="Slowly cycle the colours (off by default)"><span>Flow</span><input type="range" id="cycle" min="0" max="0.3" step="0.005" /></label>
+            <label class="slider" title="Soft 3D lighting"><span>Relief</span><input type="range" id="shade" min="0" max="1" step="0.01" /></label>
+            <button class="text-btn" id="btnResetColour" title="Double-click any slider to reset just that one">Reset colour settings</button>
           </section>
 
           <section>
@@ -86,7 +87,6 @@
             <div class="seg" id="quality" role="radiogroup" aria-label="Render quality">
               <button data-v="0.6">Fast</button><button data-v="1">Sharp</button><button data-v="1.5">Ultra</button>
             </div>
-            <label class="slider"><span>Detail</span><input type="range" id="detail" min="0.5" max="4" step="0.05" /></label>
           </section>
 
           <section class="about">

@@ -21,10 +21,10 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   formula: 'mandelbrot',
-  palette: 'aurora',
-  density: 1,
-  cycle: 0.04,
-  shade: 0.55,
+  palette: 'abyss',
+  density: 0.35,
+  cycle: 0,
+  shade: 0.9,
   speed: 0.55,
   quality: 1,
   detail: 1,
@@ -46,6 +46,12 @@ export class FraxApp {
   private inertia = { vx: 0, vy: 0 };
   private period = 24;
   private offset = 0;
+  private period2 = 24;
+  private offset2 = 0;
+  private fade = 1;
+  private colourReady = false;
+  /** set when a setting changes so the new colours apply without delay */
+  private colourSnap = false;
   private phase = 0;
   private lastT = performance.now();
   private listeners = new Set<Listener>();
@@ -142,6 +148,7 @@ export class FraxApp {
   set<K extends keyof Settings>(key: K, value: Settings[K]) {
     if (this.settings[key] === value) return;
     this.settings[key] = value;
+    if (key === 'density') this.colourSnap = true;
     if (key === 'palette') {
       this.palette = PALETTES.find((p) => p.id === value) ?? PALETTES[0];
       this.engine.setPalette(buildPalette(this.palette));
@@ -190,6 +197,10 @@ export class FraxApp {
 
   zoomBy(ax: number, ay: number, dlog2: number, smooth = true) {
     const ay2 = this.info.flipY ? -ay : ay;
+    // Don't let people zoom out into empty space far beyond the whole set.
+    const maxOut = this.homeLog2w + 1.5 - this.view.log2w - (this.zoomAnim?.remaining ?? 0);
+    dlog2 = Math.min(dlog2, Math.max(0, maxOut));
+    if (dlog2 === 0 && !this.zoomAnim) return;
     if (smooth) {
       const rem = (this.zoomAnim?.remaining ?? 0) + dlog2;
       this.zoomAnim = { ax, ay: ay2, remaining: Math.max(-6, Math.min(6, rem)) };
@@ -294,20 +305,16 @@ export class FraxApp {
     this.engine.frame(dtMs);
 
     // Colour mapping adapts smoothly to the iteration range on screen.
-    const stats = this.visibleStats();
-    if (stats) {
-      // Wide enough to span the frame's range, but never so tight that bands alias per pixel.
-      const targetP = Math.max(2, stats.spread * 0.4, stats.detail * 5) / this.settings.density;
-      const k = 1 - Math.exp(-dt / 1.2);
-      this.period = Math.exp(Math.log(this.period) + (Math.log(targetP) - Math.log(this.period)) * k);
-      this.offset += (stats.medianN - this.offset) * (1 - Math.exp(-dt / 2.5));
-    }
+    this.updateColourRange(dt);
     this.phase = (this.phase + this.settings.cycle * dt) % 1;
 
     const color: ColorParams = {
       period: this.period,
       phase: this.phase,
       offset: this.offset,
+      period2: this.period2,
+      offset2: this.offset2,
+      mix: this.fade < 1 ? this.fade * this.fade * (3 - 2 * this.fade) : 1,
       shade: this.settings.shade,
       mapMode: 0,
       interior: hexToRgb01(this.palette.interior),
@@ -322,6 +329,57 @@ export class FraxApp {
       f(this.canvas);
     }
   };
+
+  /**
+   * Colour is a fixed function of iteration count, and a point in the plane
+   * always has the same count — so every structure keeps its colour while
+   * you zoom; only newly revealed detail brings new shades. The band width
+   * slowly adapts to how much range is on screen, pivoting around the
+   * median so nothing visibly shifts. Big jumps (going home, switching
+   * fractal) crossfade over a second instead of strobing.
+   */
+  private updateColourRange(dt: number) {
+    const stats = this.visibleStats();
+    if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 1.1);
+    if (!stats) return;
+    // Wide enough to span the frame's range, never so tight that bands alias per pixel.
+    const tp = Math.max(2, stats.spread * 0.4, stats.detail * 5) / this.settings.density;
+    const pivot = stats.medianN;
+    const setPeriod = (p: number) => {
+      // Keep the colour at the pivot unchanged while the bands widen or narrow.
+      this.offset = pivot - ((pivot - this.offset) * p) / this.period;
+      this.period = p;
+    };
+    if (!this.colourReady) {
+      this.period = tp;
+      this.offset = pivot;
+      this.colourReady = true;
+      return;
+    }
+    if (this.colourSnap) {
+      setPeriod(tp);
+      this.colourSnap = false;
+      return;
+    }
+    if (Math.abs(Math.log(tp / this.period)) > 0.9) {
+      if (this.fade >= 1) {
+        this.startFade();
+        this.period = tp;
+        this.offset = pivot;
+      }
+      return;
+    }
+    // Gentle, rate-limited adaptation of the band width.
+    const maxLog = 0.05 * dt;
+    const dl = Math.max(-maxLog, Math.min(maxLog, Math.log(tp / this.period)));
+    if (dl !== 0) setPeriod(this.period * Math.exp(dl));
+  }
+
+  private startFade() {
+    this.period2 = this.period;
+    this.offset2 = this.offset;
+    this.fade = 0;
+  }
 
   private visibleStats(): LayerStats | null {
     if (this.journey) return this.journey.currentStats;

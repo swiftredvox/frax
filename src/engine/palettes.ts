@@ -10,18 +10,18 @@ export interface Palette {
 }
 
 export const PALETTES: Palette[] = [
-  { id: 'aurora', name: 'Aurora', stops: ['#03101f', '#0b3a5c', '#1d8a8a', '#7fe0b0', '#f4f9e9', '#5fb4d9', '#13306b'], interior: '#02060d' },
-  { id: 'ember', name: 'Ember', stops: ['#0a0204', '#3d0716', '#9b1b2a', '#f0592a', '#ffcf6b', '#fff6dc', '#c4542b', '#3a0b17'], interior: '#050102' },
-  { id: 'abyss', name: 'Abyss', stops: ['#000208', '#06204a', '#1060a8', '#58b8f0', '#e8f8ff', '#3070c0', '#081a40'], interior: '#000105' },
-  { id: 'nebula', name: 'Nebula', stops: ['#07020f', '#2a0b4d', '#7b1fa2', '#e0529c', '#ffb59a', '#fff1e0', '#8a5bd6', '#1b0d3d'], interior: '#030108' },
-  { id: 'gilded', name: 'Gilded', stops: ['#050403', '#2b1d0e', '#7a5320', '#d9a441', '#fff1c1', '#a77a2e', '#3a2810'], interior: '#020201' },
-  { id: 'lagoon', name: 'Lagoon', stops: ['#011417', '#03464d', '#0f8b84', '#6fd6b8', '#f2ffe9', '#f0c27b', '#2b6f6a'], interior: '#000a0b' },
-  { id: 'prism', name: 'Prism', stops: ['#ff3b5c', '#ffb02e', '#e8ff5a', '#34e39a', '#2bb6ff', '#6a5cff', '#e04cff'], interior: '#06040c' },
-  { id: 'frost', name: 'Frost', stops: ['#0b0f1a', '#2a3550', '#6a7ea8', '#c9d8f0', '#ffffff', '#9fb4d8', '#3a4a70'], interior: '#05070c' },
-  { id: 'verdant', name: 'Verdant', stops: ['#020904', '#0d2e14', '#2f6b2a', '#9ccc4a', '#f6f7c8', '#5f9a3a', '#163d1c'], interior: '#010402' },
-  { id: 'ink', name: 'Ink', stops: ['#000000', '#1a1a1a', '#5a5a5a', '#d8d8d8', '#ffffff', '#8a8a8a', '#2a2a2a'], interior: '#000000' },
-  { id: 'classic', name: 'Classic', stops: ['#000764', '#206bcb', '#edffff', '#ffaa00', '#000200'], interior: '#000000' },
-  { id: 'synth', name: 'Synthwave', stops: ['#0d0221', '#261447', '#ff3864', '#ff8f3f', '#fdf5a6', '#2de2e6', '#3b1d6e'], interior: '#06010f' },
+  { id: 'abyss', name: 'Abyss', stops: ['#02040b', '#061a3a', '#0d3f73', '#2a76a8', '#7cbcd6', '#2f6f9a', '#0a2650'], interior: '#010208' },
+  { id: 'aurora', name: 'Aurora', stops: ['#03101f', '#0b3a5c', '#1d7a7a', '#5fbf9a', '#b9e3c6', '#4f9fc0', '#13306b'], interior: '#02060d' },
+  { id: 'ink', name: 'Ink', stops: ['#000000', '#141414', '#3a3a3a', '#7e7e7e', '#bcbcbc', '#666666', '#242424'], interior: '#000000' },
+  { id: 'moonlight', name: 'Moonlight', stops: ['#05070c', '#131a29', '#2c3952', '#647794', '#a5b3ca', '#53627c', '#1b2337'], interior: '#030409' },
+  { id: 'deepsea', name: 'Deep Sea', stops: ['#010608', '#03222a', '#06454f', '#13757a', '#5aaea3', '#1d5f6a', '#062c38'], interior: '#000405' },
+  { id: 'twilight', name: 'Twilight', stops: ['#07050f', '#1d1438', '#3b2a6b', '#6c5aa4', '#ab9dd3', '#58498c', '#231a46'], interior: '#04030a' },
+  { id: 'jade', name: 'Jade', stops: ['#020805', '#0a2a1c', '#185c3f', '#3f9470', '#9ccfb1', '#2f7656', '#0f3324'], interior: '#010402' },
+  { id: 'lagoon', name: 'Lagoon', stops: ['#011417', '#03464d', '#0f8077', '#5cbca4', '#c9e6c9', '#cfa86d', '#2b6f6a'], interior: '#000a0b' },
+  { id: 'nebula', name: 'Nebula', stops: ['#07020f', '#2a0b4d', '#6b1f92', '#c0508d', '#e7a996', '#7a52c0', '#1b0d3d'], interior: '#030108' },
+  { id: 'ember', name: 'Ember', stops: ['#0a0204', '#3d0716', '#8a1c2a', '#cc5a30', '#eab070', '#a8452a', '#3a0b17'], interior: '#050102' },
+  { id: 'gilded', name: 'Gilded', stops: ['#050403', '#2b1d0e', '#6e4c1e', '#bd8f3e', '#e3cb94', '#946a28', '#3a2810'], interior: '#020201' },
+  { id: 'classic', name: 'Classic', stops: ['#000764', '#206bcb', '#cfe6f0', '#e8a030', '#1a0f02'], interior: '#000000' },
 ];
 
 function hexToRgb(h: string): [number, number, number] {

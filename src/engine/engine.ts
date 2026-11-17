@@ -37,6 +37,10 @@ export interface ColorParams {
   period: number;
   phase: number;
   offset: number;
+  /** previous mapping, crossfaded out while mix < 1 */
+  period2: number;
+  offset2: number;
+  mix: number;
   shade: number;
   mapMode: 0 | 1;
   interior: [number, number, number];
@@ -101,7 +105,7 @@ interface RefTex {
   lastUsed: number;
 }
 
-const LAYER_FORMULA: Record<Formula, number> = { mandelbrot: 0, julia: 1, burningship: 2, multibrot3: 3 };
+const LAYER_FORMULA: Record<Formula, number> = { mandelbrot: 0, julia: 1, burningship: 2, multibrot3: 3, tricorn: 4 };
 
 export class Engine {
   readonly gl: WebGL2RenderingContext;
@@ -558,6 +562,9 @@ export class Engine {
       .f('uPeriod', color.period)
       .f('uPhase', color.phase)
       .f('uOffset', color.offset)
+      .f('uPeriod2', color.period2)
+      .f('uOffset2', color.offset2)
+      .f('uMix', color.mix)
       .f('uShade', color.shade)
       .i('uMapMode', color.mapMode)
       .v3('uInterior', ...color.interior)

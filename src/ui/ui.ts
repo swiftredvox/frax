@@ -1,4 +1,4 @@
-import type { FraxApp, Settings } from '../app/app';
+import { DEFAULT_SETTINGS, type FraxApp, type Settings } from '../app/app';
 import { magnification } from '../app/camera';
 import { FRACTALS } from '../app/fractals';
 import { fromDecimal, toDecimal, toNumber } from '../core/hp';
@@ -165,7 +165,16 @@ export class UI {
     slider('density');
     slider('cycle');
     slider('shade');
-    slider('detail');
+    // Double-click a slider to put it back to its default.
+    for (const id of ['density', 'cycle', 'shade'] as const) {
+      $(id).addEventListener('dblclick', () => app.set(id, DEFAULT_SETTINGS[id]));
+    }
+    $('btnResetColour').onclick = () => {
+      app.set('density', DEFAULT_SETTINGS.density);
+      app.set('cycle', DEFAULT_SETTINGS.cycle);
+      app.set('shade', DEFAULT_SETTINGS.shade);
+      this.toast('Colour settings reset');
+    };
     $('quality')
       .querySelectorAll<HTMLButtonElement>('button')
       .forEach((b) => {
@@ -242,7 +251,7 @@ export class UI {
     $('speedVal').textContent = `${s.speed.toFixed(2)}×`;
     this.fill(speed);
 
-    for (const id of ['density', 'cycle', 'shade', 'detail'] as const) {
+    for (const id of ['density', 'cycle', 'shade'] as const) {
       const el = $<HTMLInputElement>(id);
       if (document.activeElement !== el) el.value = String(s[id]);
       this.fill(el);
@@ -312,7 +321,7 @@ export class UI {
     if (this.app.isJourney && st.stalled) text = 'Rendering ahead…';
     else if (!this.app.isJourney && st.rendering) text = st.orbit && deep ? 'Computing reference orbit…' : 'Rendering…';
     el.classList.toggle('on', !!text);
-    if (text) $('statusText').textContent = text;
+    if (text) el.title = text;
     if (this.recorder?.active) {
       const s = Math.floor((performance.now() - this.recorder.startedAt) / 1000);
       $('btnRec').title = `Recording ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} — click to stop`;

@@ -60,6 +60,10 @@ function orbit(
       const ny = ((y * (3n * x2 - y2)) >> P) + cy;
       x = nx;
       y = ny;
+    } else if (formula === 'tricorn') {
+      const xy = (x * y) >> (P - 1n);
+      x = x2 - y2 + cx;
+      y = cy - xy;
     } else {
       const xy = (x * y) >> (P - 1n);
       x = x2 - y2 + cx;

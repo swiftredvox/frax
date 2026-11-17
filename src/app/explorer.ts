@@ -41,6 +41,7 @@ export class Explorer {
   }
 
   update(cam: View, now: number) {
+    this.forgetBoostIfFar(cam.log2w);
     if (!this.lastCam || !sameView(cam, this.lastCam)) {
       this.lastChange = now;
       this.lastCam = cam;
@@ -84,18 +85,46 @@ export class Explorer {
 
   private adopt(L: Layer) {
     this.done.push(L);
-    if (L.stats && L.tag === 'full' && L.stats.hiFrac > 0.01 && this.iterBoost < 8) {
-      // Detail is still being lost at the iteration cap: raise it and refine this view.
-      this.iterBoost = Math.min(64, this.iterBoost * 2);
-      if (this.lastCam && sameView(L.view, this.lastCam)) this.fullView = null;
-    } else if (L.stats && L.tag === 'full' && L.stats.hiFrac < 0.0002) {
-      this.iterBoost = Math.max(1, this.iterBoost * 0.85);
-    }
+    if (L.stats && L.tag === 'full') this.refine(L);
     // Previews older than a newer full render are no longer useful.
     if (L.tag === 'full') {
       for (const p of this.done.filter((l) => l.tag === 'preview' && l.finishedAt < L.finishedAt)) this.drop(p);
     }
     while (this.done.length > 7) this.drop(this.done[0]);
+  }
+
+  private refineFor: { view: View; interior: number; tries: number } | null = null;
+
+  /**
+   * Black areas may be genuinely inside the set or just short of iterations.
+   * Keep doubling the iteration cap while doing so still shrinks the black
+   * area; stop once it no longer changes.
+   */
+  private refine(L: Layer) {
+    const s = L.stats!;
+    const same = this.refineFor && sameView(this.refineFor.view, L.view);
+    const prev = same ? this.refineFor! : null;
+    const helped = !prev || prev.interior - s.interior > 0.0015;
+    const tries = prev ? prev.tries + 1 : 0;
+    const wantMore = (s.interior > 0.002 || s.hiFrac > 0.01) && helped && tries < 6 && L.maxIter < 1 << 21;
+    if (wantMore) {
+      this.iterBoost = Math.min(256, this.iterBoost * 2);
+      this.boostDepth = L.log2w;
+      this.refineFor = { view: L.view, interior: s.interior, tries };
+      if (this.lastCam && sameView(L.view, this.lastCam)) this.fullView = null;
+    } else {
+      this.refineFor = { view: L.view, interior: s.interior, tries: 99 };
+    }
+  }
+
+  /** where the boost was learned; zooming far back out forgets it */
+  private boostDepth = 0;
+
+  forgetBoostIfFar(log2w: number) {
+    if (this.iterBoost > 1 && log2w > this.boostDepth + 4) {
+      this.iterBoost = 1;
+      this.refineFor = null;
+    }
   }
 
   private drop(L: Layer) {

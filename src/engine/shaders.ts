@@ -42,7 +42,7 @@ uniform int uRebase;       // index where the critical orbit (Z = 0) starts
 uniform int uMaxIter;
 uniform int uSteps;
 uniform float uBail2;
-uniform int uFormula;      // 0 mandelbrot, 1 julia, 2 burning ship, 3 multibrot-3
+uniform int uFormula;      // 0 mandelbrot, 1 julia, 2 burning ship, 3 multibrot-3, 4 tricorn
 uniform float uLogPow;
 
 layout(location=0) out vec4 o0;
@@ -73,6 +73,7 @@ vec2 stepD(vec2 Z, vec2 d, float s, float es, vec2 dct){
     return 3.0*cmul(Z2, d) + 3.0*s*cmul(Z, d2) + s*s*cmul(d2, d) + dct;
   }
   vec2 r = cmul(2.0*Z, d) + s*cmul(d, d);
+  if (uFormula == 4) r.y = -r.y;            // tricorn: conj(z)^2 + c
   return (uFormula == 1) ? r : r + dct;
 }
 
@@ -230,6 +231,9 @@ uniform sampler2D uPal;
 uniform float uPeriod;
 uniform float uPhase;
 uniform float uOffset;
+uniform float uPeriod2;   // previous mapping, faded out over uMix
+uniform float uOffset2;
+uniform float uMix;       // 1 = only the current mapping
 uniform float uShade;
 uniform int uMapMode;
 uniform vec3 uInterior;
@@ -264,7 +268,10 @@ float sampleV(vec2 p, out bool ok){
 }
 
 float mapT(float v){
-  return (uMapMode == 1) ? (log(v + 1.0) - log(uOffset + 1.0)) / uPeriod + uPhase : (v - uOffset) / uPeriod + uPhase;
+  return (v - uOffset) / uPeriod + uPhase;
+}
+float mapT2(float v){
+  return (v - uOffset2) / uPeriod2 + uPhase;
 }
 
 vec3 toLin(vec3 c){ return pow(c, vec3(2.2)); }
@@ -275,6 +282,7 @@ vec3 colorAt(vec2 p, float px){
   if (!ok) return toLin(uBg);
   if (v < 0.0) return toLin(uInterior);
   vec3 c = toLin(texture(uPal, vec2(mapT(v), 0.5)).rgb);
+  if (uMix < 1.0) c = mix(toLin(texture(uPal, vec2(mapT2(v), 0.5)).rgb), c, uMix);
   if (uShade > 0.0) {
     bool okx, oky;
     float vx = sampleV(p + vec2(px, 0.0), okx);

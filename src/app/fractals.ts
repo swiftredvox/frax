@@ -41,6 +41,14 @@ export const FRACTALS: FractalInfo[] = [
     journeyStart: { x: -1.7612, y: -0.0285, w: 0.09 },
   },
   {
+    id: 'tricorn',
+    name: 'Tricorn',
+    blurb: 'The Mandelbar: z is mirrored every step, giving three-fold symmetry and flowing, wave-like filaments.',
+    home: { x: -0.3, y: 0, w: 4.4 },
+    flipY: false,
+    formulaTex: 'z̄² + c',
+  },
+  {
     id: 'multibrot3',
     name: 'Multibrot³',
     blurb: 'The cubic cousin of the Mandelbrot set — twin lobes, twice the symmetry.',
