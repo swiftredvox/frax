@@ -1,6 +1,7 @@
 import { addScaled, bitsFor, fromDecimal, toNumber, type HP } from '../core/hp';
 import type { Engine, FractalSpec, Layer, LayerStats, View } from '../engine/engine';
 import { loopDepth, type LoopTarget } from './loops';
+import { keyframeSize, Pacer } from './pace';
 
 export interface LoopOptions {
   speed: number; // octaves per second
@@ -34,6 +35,8 @@ export class LoopRun {
   u = 0;
   cycle = 0;
   stalled = false;
+  private pacer = new Pacer();
+  private lastAvail = 0;
 
   constructor(
     private engine: Engine,
@@ -96,7 +99,7 @@ export class LoopRun {
   /** Iterations needed at depth u: grows like period^(u / depth) toward the copy. */
   private iterFor(u: number) {
     const a = u / this.depth;
-    const want = 450 * Math.pow(this.target.period, a) * (1 + a);
+    const want = 260 * Math.pow(this.target.period, a) * (1 + 0.5 * a);
     return Math.round(Math.min(1 << 22, Math.max(this.iterBase(this.home.log2w - u) * 1.2, want)));
   }
 
@@ -123,7 +126,8 @@ export class LoopRun {
     const { w, h } = this.size();
     const q = this.opts.quality;
     const view: View = { ...v, log2w: v.log2w + Math.log2(MARGIN) };
-    const L = this.engine.createLayer(view, w * q * MARGIN, h * q * MARGIN, this.iterFor(u), this.spec, 20 - i * 0.01);
+    const [kw, kh] = keyframeSize(w * MARGIN, h * MARGIN, q);
+    const L = this.engine.createLayer(view, kw, kh, this.iterFor(u), this.spec, 20 - i * 0.01);
     L.tag = 'loop';
     this.kfs.set(i, L);
   }
@@ -160,15 +164,26 @@ export class LoopRun {
       if (this.kfs.get(j)?.status === 'done') avail = this.positions[j];
       else break;
     }
+    // Past the end the loop continues from the start, so count the (cached)
+    // opening keyframes too — otherwise the camera would creep towards the
+    // seam forever instead of gliding through it.
+    if (avail >= this.depth) {
+      for (let j = 1; j < KEEP && j < this.positions.length; j++) {
+        if (this.kfs.get(j)?.status === 'done') avail = this.depth + this.positions[j];
+        else break;
+      }
+    }
     if (this.kfs.get(i)?.status !== 'done') avail = this.u;
     const ahead = avail - this.u;
-    const ease = smoothstep(0, 1.25, ahead);
+    if (avail > this.lastAvail) this.pacer.produced(avail - this.lastAvail);
+    this.lastAvail = avail;
     this.stalled = ahead < 0.35;
-    this.u = Math.min(this.u + this.opts.speed * dt * ease, avail);
+    this.u = Math.min(this.u + this.pacer.step(this.opts.speed, ahead, dt) * dt, avail);
 
-    if (this.u >= this.depth - 1e-9) {
+    if (this.u >= this.depth) {
       // Arrived inside the copy: it is the start again.
-      this.u = 0;
+      this.u -= this.depth;
+      this.lastAvail = Math.max(0, this.lastAvail - this.depth);
       this.cycle++;
     }
 
@@ -222,7 +237,3 @@ export class LoopRun {
   }
 }
 
-function smoothstep(a: number, b: number, x: number) {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-}

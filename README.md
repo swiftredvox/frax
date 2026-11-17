@@ -16,7 +16,7 @@
 ## What it does
 
 - **Journey mode** — one button starts a hands-free zoom that keeps going. An autopilot reads each frame, steers towards spirals and filigree, avoids dead ends, and never stops to wait.
-- **Loop mode** — dive into a hidden, perfect copy of the Mandelbrot set. The copy looks just like the start, so the zoom flows back round and repeats forever. Eight hand-found loops, up to 10²⁶ deep.
+- **Loop mode** — dive into a hidden, perfect copy of the Mandelbrot set. The copy looks just like the start, so the zoom flows back round and repeats forever. Ten hand-found loops, from about a minute to a couple of minutes per cycle.
 - **Deep zoom** — far past the 10¹⁵ limit of ordinary graphics maths. Frax has flown beyond 10¹¹⁰ and keeps its detail all the way down.
 - **Destinations** — a gallery of hand-picked places, from Seahorse Valley to spirals more than 10¹¹⁰ deep. Visit any of them or start a journey from there.
 - **Smooth at 60 fps** — the next stretch of the zoom is rendered ahead of you in the background, so playback never stutters, however deep you are.

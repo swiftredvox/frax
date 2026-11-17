@@ -178,7 +178,7 @@ export class UI {
     add('shuffle', 'Shuffle', 'A different loop each time');
     for (const l of LOOPS) {
       const m = magnification(-loopDepth(l), 0);
-      add(l.id, l.name, `${l.name}: a copy 10${sup(m.exp)} times smaller`);
+      add(l.id, l.name, `${l.name} · 10${sup(m.exp)} deep`);
     }
     $('btnLoop').onclick = () => this.toggleLoop();
   }

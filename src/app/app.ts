@@ -306,6 +306,7 @@ export class FraxApp {
       },
       this.maxIterFor(this.view),
       seed,
+      this.explorer.take(this.view),
     );
     this.emit();
   }

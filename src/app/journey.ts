@@ -1,5 +1,6 @@
 import { addScaled, bitsFor, diffScaled, type HP } from '../core/hp';
 import { toScreen, toWorld } from './camera';
+import { keyframeSize, Pacer } from './pace';
 import type { Engine, FractalSpec, Layer, LayerStats, View } from '../engine/engine';
 
 interface Keyframe {
@@ -35,6 +36,8 @@ export class Journey {
   private maxIter: number;
   private rng: () => number;
   stalled = false;
+  private pacer = new Pacer();
+  private lastDone = -1;
   readonly startLog2w: number;
   private aspect: number;
 
@@ -46,13 +49,17 @@ export class Journey {
     private opts: JourneyOptions,
     startIter: number,
     seed = Math.floor(Math.random() * 1e9),
+    firstLayer?: Layer,
   ) {
     this.startLog2w = start.log2w;
     this.maxIter = Math.max(256, Math.round(startIter));
     this.rng = mulberry32(seed);
     const { w, h } = size();
     this.aspect = h / w;
-    this.addKeyframe(start);
+    // Reuse the frame already on screen as the first keyframe when possible.
+    if (firstLayer && firstLayer.status === 'done') {
+      this.kfs.push({ index: 0, view: firstLayer.view, layer: firstLayer, next: null, dz: 1 });
+    } else this.addKeyframe(start);
   }
 
   setOptions(o: Partial<JourneyOptions>) {
@@ -67,7 +74,8 @@ export class Journey {
     const { w, h } = this.size();
     const q = this.opts.quality;
     const index = this.kfs.length ? this.kfs[this.kfs.length - 1].index + 1 : 0;
-    const layer = this.engine.createLayer(view, w * q, h * q, this.maxIter, this.spec, 20 - index * 0.01);
+    const [kw, kh] = keyframeSize(w, h, q);
+    const layer = this.engine.createLayer(view, kw, kh, this.maxIter, this.spec, 20 - index * 0.01);
     this.kfs.push({ index, view, layer, next: null, dz: 1 });
   }
 
@@ -102,9 +110,12 @@ export class Journey {
 
     // Camera speed eases off when the renderer is behind, instead of stuttering.
     const ahead = done - this.t;
-    const ease = smoothstep(0, 1.25, ahead);
+    if (done > this.lastDone) {
+      this.pacer.produced(done - this.lastDone);
+      this.lastDone = done;
+    }
     this.stalled = ahead < 0.35;
-    this.t = Math.min(this.t + this.opts.speed * dt * ease, Math.max(0, done));
+    this.t = Math.min(this.t + this.pacer.step(this.opts.speed, ahead, dt) * dt, Math.max(0, done));
 
     // Drop keyframes far behind the camera.
     while (this.kfs.length > 2 && this.kfs[1].index < Math.floor(this.t)) {
@@ -328,10 +339,6 @@ function nearestCell(cells: Cell[], x: number, y: number) {
 }
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
-function smoothstep(a: number, b: number, x: number) {
-  const t = clamp((x - a) / (b - a), 0, 1);
-  return t * t * (3 - 2 * t);
-}
 function mulberry32(a: number) {
   return () => {
     a |= 0;

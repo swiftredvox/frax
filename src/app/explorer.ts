@@ -133,6 +133,13 @@ export class Explorer {
     this.engine.dispose(L);
   }
 
+  /** Hand over the finished full render of exactly this view, if there is one. */
+  take(view: View): Layer | undefined {
+    const i = this.done.findIndex((l) => l.tag === 'full' && sameView(l.view, view));
+    if (i < 0) return undefined;
+    return this.done.splice(i, 1)[0];
+  }
+
   /** Take over finished layers produced elsewhere (e.g. by a journey). */
   inherit(layers: Layer[]) {
     for (const L of layers) if (L.status === 'done' && !this.done.includes(L)) this.done.push(L);
