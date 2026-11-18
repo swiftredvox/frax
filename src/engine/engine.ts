@@ -612,7 +612,7 @@ export class Engine {
     const vis = layers
       .filter((l) => l.displayTex && l.status !== 'disposed')
       .filter((l) => l.log2px > camPx - 1.6) // skip layers far finer than a screen pixel
-      .sort((a, b) => a.log2px - b.log2px)
+      .sort((a, b) => a.log2px - b.log2px || b.id - a.id)
       .slice(0, 4);
     const rects = new Float32Array(16);
     const sizes = new Float32Array(8);

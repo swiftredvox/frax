@@ -89,6 +89,7 @@ export class Explorer {
     // Previews older than a newer full render are no longer useful.
     if (L.tag === 'full') {
       for (const p of this.done.filter((l) => l.tag === 'preview' && l.finishedAt < L.finishedAt)) this.drop(p);
+      for (const p of this.done.filter((l) => l !== L && l.tag === 'full' && sameView(l.view, L.view))) this.drop(p);
     }
     while (this.done.length > 7) this.drop(this.done[0]);
   }
@@ -106,7 +107,10 @@ export class Explorer {
     const prev = same ? this.refineFor! : null;
     const helped = !prev || prev.interior - s.interior > 0.0015;
     const tries = prev ? prev.tries + 1 : 0;
-    const wantMore = (s.interior > 0.002 || s.hiFrac > 0.01) && helped && tries < 6 && L.maxIter < 1 << 21;
+    // A frame that is (almost) entirely black is never a finished picture: deep
+    // views can need tens of thousands of iterations before anything escapes.
+    const blank = s.interior > 0.9;
+    const wantMore = (s.interior > 0.002 || s.hiFrac > 0.01) && (helped || blank) && tries < 9 && L.maxIter < 1 << 22;
     if (wantMore) {
       this.iterBoost = Math.min(256, this.iterBoost * 2);
       this.boostDepth = L.log2w;

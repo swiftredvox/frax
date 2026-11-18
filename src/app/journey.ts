@@ -240,7 +240,8 @@ export class Journey {
 
     // ---- iteration budget follows the detail ----
     const cap = this.opts.iterCap(W - 1);
-    if (s.hiFrac > 0.01) this.maxIter = Math.ceil(this.maxIter * 1.3);
+    if (s.interior > 0.9) this.maxIter = Math.ceil(this.maxIter * 2);
+    else if (s.hiFrac > 0.01) this.maxIter = Math.ceil(this.maxIter * 1.3);
     else if (s.hiFrac > 0.003) this.maxIter = Math.ceil(this.maxIter * 1.12);
     this.maxIter = Math.round(Math.min(this.maxIter, cap, 1 << 22));
 

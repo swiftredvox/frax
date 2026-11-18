@@ -578,11 +578,14 @@ export class FraxApp {
 
   private visibleStats(since = 0): LayerStats | null {
     if (this.journey) return this.journey.currentStats;
+    // Closest in scale wins; among equals, the newest (it has the best iteration
+    // count). Frames where nothing escaped say nothing about colour range.
     let best: Layer | null = null;
+    const dist = (l: Layer) => Math.abs(l.log2w - this.view.log2w);
     for (const l of this.explorer.layers) {
       if (l.status !== 'done' || !l.stats || l.finishedAt < since) continue;
-      if (Math.abs(l.log2w - this.view.log2w) > 3) continue;
-      if (!best || Math.abs(l.log2w - this.view.log2w) < Math.abs(best.log2w - this.view.log2w)) best = l;
+      if (dist(l) > 3 || l.stats.interior > 0.98) continue;
+      if (!best || dist(l) < dist(best) - 1e-9 || (Math.abs(dist(l) - dist(best)) < 1e-9 && l.finishedAt > best.finishedAt)) best = l;
     }
     return best?.stats ?? null;
   }
