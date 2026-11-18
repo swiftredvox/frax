@@ -307,6 +307,7 @@ export class UI {
         this.toggleDest(false);
       } else if (k === 'd' || k === 'D') this.toggleDest();
       else if (k === 'l' || k === 'L') this.toggleLoop();
+      else if (k === '`') this.toggleDiag();
       else if (k === '+' || k === '=') app.zoomBy(0, 0, -1);
       else if (k === '-' || k === '_') app.zoomBy(0, 0, 1);
       else return;
@@ -423,6 +424,42 @@ export class UI {
   }
 
   // ------------------------------------------------------------ actions
+
+  private diagTimer = 0;
+  private diagHist: { t: number; d: number }[] = [];
+
+  /** Hidden diagnostics (press `): speed, frame rate, and where render time goes. */
+  private toggleDiag() {
+    const el = $('diag');
+    el.hidden = !el.hidden;
+    clearInterval(this.diagTimer);
+    if (el.hidden) return;
+    this.diagHist = [];
+    const tick = () => {
+      const a = this.app;
+      const e = a.engine;
+      const now = performance.now();
+      const depth = a.homeLog2w - a.view.log2w;
+      this.diagHist.push({ t: now, d: depth });
+      while (this.diagHist.length > 1 && now - this.diagHist[0].t > 10000) this.diagHist.shift();
+      const h0 = this.diagHist[0];
+      const rate = now > h0.t + 500 ? (depth - h0.d) / ((now - h0.t) / 1000) : 0;
+      const l = e.diag.last;
+      const ua = navigator.userAgent.match(/(Firefox|Edg|Chrome|Safari)\/[\d.]+/)?.[0] ?? 'browser';
+      el.textContent = [
+        `${ua}  ·  ${e.diag.renderer}`,
+        `GPU timer ${e.diag.timer ? 'yes' : 'no'}  ·  budget ${(e.budget / 1e6).toFixed(0)}M px·it/frame`,
+        `fps ${a.fps.toFixed(0)}  ·  canvas ${a.canvas.width}×${a.canvas.height}`,
+        `mode ${a.isLoop ? 'loop' : a.isJourney ? 'journey' : 'explore'}  ·  speed ${a.settings.speed.toFixed(2)}  ·  actual ${rate.toFixed(2)} oct/s`,
+        `depth ${depth.toFixed(1)} octaves`,
+        l
+          ? `last frame ${l.tag || 'keyframe'} ${l.w}×${l.h}  it ${l.maxIter}  BLA ${l.bla ? 'on' : 'off'}\n  orbit ${l.orbitMs.toFixed(0)} ms  ·  GPU ${l.gpuMs.toFixed(0)} ms`
+          : 'last frame —',
+      ].join('\n');
+    };
+    tick();
+    this.diagTimer = window.setInterval(tick, 500);
+  }
 
   togglePanel(force?: boolean) {
     const p = $('panel');

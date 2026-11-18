@@ -68,6 +68,8 @@ export class Layer {
   startedAt = performance.now();
   finishedAt = 0;
   orbitProgress = 0;
+  /** when the reference orbit was ready and GPU work began */
+  gpuStartedAt = 0;
   onDone?: (l: Layer) => void;
   tag = '';
 
@@ -136,6 +138,12 @@ export class Engine {
   private finFbo: WebGLFramebuffer;
   private palTex: WebGLTexture;
   readonly PEND = 32;
+  /** Numbers for the diagnostics panel. */
+  readonly diag: {
+    timer: boolean;
+    renderer: string;
+    last: { tag: string; w: number; h: number; maxIter: number; orbitMs: number; gpuMs: number; bla: boolean } | null;
+  } = { timer: false, renderer: '', last: null };
   /** bilinear approximation on/off (on; off is useful for comparisons) */
   useBla = true;
 
@@ -159,6 +167,9 @@ export class Engine {
     }
     this.gl = gl;
     this.timerExt = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    this.diag.timer = !!this.timerExt;
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    this.diag.renderer = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
     this.pool = new TexPool(gl);
     this.pIter = new Program(gl, VS, ITERATE_FS);
     this.pFinal = new Program(gl, VS, FINALIZE_FS);
@@ -324,6 +335,7 @@ export class Engine {
   }
 
   private attachRef(L: Layer, r: RefTex) {
+    L.gpuStartedAt = performance.now();
     r.users++;
     r.lastUsed = performance.now();
     L.ref = r;
@@ -522,10 +534,20 @@ export class Engine {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     L.result = res;
+    const hadBla = !!(this.useBla && L.ref?.blaU);
     this.freeWork(L);
     L.stats = this.computeStats(L);
     L.status = 'done';
     L.finishedAt = performance.now();
+    this.diag.last = {
+      tag: L.tag,
+      w: L.w,
+      h: L.h,
+      maxIter: L.maxIter,
+      orbitMs: L.gpuStartedAt - L.startedAt,
+      gpuMs: L.finishedAt - L.gpuStartedAt,
+      bla: hadBla,
+    };
     L.onDone?.(L);
   }
 
