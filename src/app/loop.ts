@@ -160,9 +160,13 @@ export class LoopRun {
 
     // How far ahead is everything rendered?
     let avail = this.u;
+    let newest: Layer | undefined;
     for (let j = i + 1; j < this.positions.length; j++) {
-      if (this.kfs.get(j)?.status === 'done') avail = this.positions[j];
-      else break;
+      const L = this.kfs.get(j);
+      if (L?.status === 'done') {
+        avail = this.positions[j];
+        newest = L;
+      } else break;
     }
     // Past the end the loop continues from the start, so count the (cached)
     // opening keyframes too — otherwise the camera would creep towards the
@@ -175,7 +179,7 @@ export class LoopRun {
     }
     if (this.kfs.get(i)?.status !== 'done') avail = this.u;
     const ahead = avail - this.u;
-    if (avail > this.lastAvail) this.pacer.produced(avail - this.lastAvail);
+    if (avail > this.lastAvail && newest) this.pacer.produced(avail - this.lastAvail, newest);
     this.lastAvail = avail;
     this.stalled = ahead < 0.35;
     this.u = Math.min(this.u + this.pacer.step(this.opts.speed, ahead, dt) * dt, avail);

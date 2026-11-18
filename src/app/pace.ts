@@ -17,18 +17,22 @@ export function keyframeSize(w: number, h: number, scale: number): [number, numb
 }
 
 export class Pacer {
-  private rate = 0; // octaves rendered per second
-  private lastAt = 0;
+  private rate = 0; // octaves the renderer can produce per second
+  private lastFinished = 0;
   speed = 0;
 
-  /** A keyframe finished, extending what is ready by `span` octaves. */
-  produced(span: number, now = performance.now()) {
-    if (span <= 0) return;
-    if (this.lastAt) {
-      const r = span / Math.max(0.05, (now - this.lastAt) / 1000);
-      this.rate = this.rate ? this.rate * 0.65 + r * 0.35 : r;
-    }
-    this.lastAt = now;
+  /**
+   * A keyframe finished, extending what is ready by `span` octaves.
+   * Only the time the renderer was actually busy counts: while it idles
+   * waiting for the camera to catch up, production says nothing about
+   * capacity (counting it made the speed shrink a little every keyframe).
+   */
+  produced(span: number, layer: { startedAt: number; finishedAt: number }) {
+    if (span <= 0 || !layer.finishedAt) return;
+    const busy = layer.finishedAt - Math.max(layer.startedAt, this.lastFinished);
+    this.lastFinished = Math.max(this.lastFinished, layer.finishedAt);
+    const r = span / Math.max(0.05, busy / 1000);
+    this.rate = this.rate ? this.rate * 0.65 + r * 0.35 : r;
   }
 
   /** Speed to use this frame, given the requested speed and how far ahead frames are ready. */

@@ -111,7 +111,8 @@ export class Journey {
     // Camera speed eases off when the renderer is behind, instead of stuttering.
     const ahead = done - this.t;
     if (done > this.lastDone) {
-      this.pacer.produced(done - this.lastDone);
+      const k = this.kf(done);
+      if (k) this.pacer.produced(done - this.lastDone, k.layer);
       this.lastDone = done;
     }
     this.stalled = ahead < 0.35;
